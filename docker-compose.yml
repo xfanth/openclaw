@@ -77,6 +77,9 @@ services:
       # Model Selection
       # ---------------------------------------------------------------------
       - OPENCLAW_PRIMARY_MODEL=${OPENCLAW_PRIMARY_MODEL:-}
+      - OPENCLAW_FALLBACK_MODELS=${OPENCLAW_FALLBACK_MODELS:-}
+      - OPENCLAW_IMAGE_MODEL_PRIMARY=${OPENCLAW_IMAGE_MODEL_PRIMARY:-}
+      - OPENCLAW_IMAGE_MODEL_FALLBACKS=${OPENCLAW_IMAGE_MODEL_FALLBACKS:-}
       
       # ---------------------------------------------------------------------
       # Authentication

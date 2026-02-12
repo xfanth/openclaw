@@ -120,6 +120,13 @@ OPENAI_API_KEY=                 # GPT models
 
 ```env
 OPENCLAW_PRIMARY_MODEL=anthropic/claude-sonnet-4-5
+
+# Fallback models (comma-separated) when primary fails
+OPENCLAW_FALLBACK_MODELS=openrouter/anthropic/claude-opus-4-5,google/gemini-2.5-pro
+
+# Image generation models
+OPENCLAW_IMAGE_MODEL_PRIMARY=openai/gpt-4o-image
+OPENCLAW_IMAGE_MODEL_FALLBACKS=openai/dall-e-3,stability-ai/stable-diffusion
 ```
 
 ### Authentication

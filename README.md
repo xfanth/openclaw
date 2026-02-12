@@ -86,6 +86,23 @@ Popular options:
 - `opencode/kimi-k2.5` - Kimi K2.5
 - `zai/glm-4.7` - Z.AI GLM-4.7
 
+#### Fallback Models
+
+Configure fallback models for when the primary model fails:
+
+```env
+OPENCLAW_FALLBACK_MODELS=openrouter/anthropic/claude-opus-4-5,google/gemini-2.5-pro
+```
+
+#### Image Models
+
+Configure models for image generation:
+
+```env
+OPENCLAW_IMAGE_MODEL_PRIMARY=openai/gpt-4o-image
+OPENCLAW_IMAGE_MODEL_FALLBACKS=openai/dall-e-3,stability-ai/stable-diffusion
+```
+
 ### Data Persistence
 
 The following directories are persisted:
@@ -234,6 +251,15 @@ services:
 | `OPENCLAW_GATEWAY_PORT` | Internal gateway port | `18789` |
 | `OPENCLAW_GATEWAY_BIND` | Bind mode (loopback/lan) | `loopback` |
 | `PORT` | External port (nginx) | `8080` |
+
+### Models
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENCLAW_PRIMARY_MODEL` | Primary text model | - |
+| `OPENCLAW_FALLBACK_MODELS` | Comma-separated fallback models | - |
+| `OPENCLAW_IMAGE_MODEL_PRIMARY` | Primary image generation model | - |
+| `OPENCLAW_IMAGE_MODEL_FALLBACKS` | Comma-separated fallback image models | - |
 
 ### Storage
 

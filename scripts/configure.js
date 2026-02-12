@@ -71,13 +71,33 @@ function buildConfig() {
     // =========================================================================
     // Agents Configuration
     // =========================================================================
-    if (process.env.OPENCLAW_PRIMARY_MODEL) {
-        config.agents.defaults = {
-            ...(config.agents.defaults || {}),
-            model: {
-                primary: process.env.OPENCLAW_PRIMARY_MODEL,
+    if (process.env.OPENCLAW_PRIMARY_MODEL || process.env.OPENCLAW_FALLBACK_MODELS || 
+        process.env.OPENCLAW_IMAGE_MODEL_PRIMARY || process.env.OPENCLAW_IMAGE_MODEL_FALLBACKS) {
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = config.agents.defaults.model || {};
+        
+        // Primary text model
+        if (process.env.OPENCLAW_PRIMARY_MODEL) {
+            config.agents.defaults.model.primary = process.env.OPENCLAW_PRIMARY_MODEL;
+        }
+        
+        // Fallback text models (comma-separated list)
+        if (process.env.OPENCLAW_FALLBACK_MODELS) {
+            config.agents.defaults.model.fallbacks = parseList(process.env.OPENCLAW_FALLBACK_MODELS);
+        }
+        
+        // Image models configuration
+        if (process.env.OPENCLAW_IMAGE_MODEL_PRIMARY || process.env.OPENCLAW_IMAGE_MODEL_FALLBACKS) {
+            config.agents.defaults.model.image = config.agents.defaults.model.image || {};
+            
+            if (process.env.OPENCLAW_IMAGE_MODEL_PRIMARY) {
+                config.agents.defaults.model.image.primary = process.env.OPENCLAW_IMAGE_MODEL_PRIMARY;
             }
-        };
+            
+            if (process.env.OPENCLAW_IMAGE_MODEL_FALLBACKS) {
+                config.agents.defaults.model.image.fallbacks = parseList(process.env.OPENCLAW_IMAGE_MODEL_FALLBACKS);
+            }
+        }
     }
 
     // Workspace configuration
