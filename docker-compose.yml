@@ -1,0 +1,329 @@
+# =============================================================================
+# OpenClaw Docker Compose Configuration
+# =============================================================================
+# This compose file sets up OpenClaw with:
+# - Persistent data storage
+# - All AI provider configurations
+# - Channel integrations (WhatsApp, Telegram, Discord, Slack)
+# - Browser automation support
+# - Webhook hooks
+# - Health checks and auto-restart
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # OpenClaw Gateway - Main Service
+  # ===========================================================================
+  openclaw:
+    # Build from local Dockerfile (for development)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     OPENCLAW_VERSION: main
+    
+    # Or use pre-built image from GitHub Packages (recommended)
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw-docker:latest}
+    
+    container_name: openclaw-gateway
+    hostname: openclaw
+    
+    # Ports
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+      # Uncomment to expose gateway directly (not recommended)
+      # - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
+    
+    # Environment Variables
+    environment:
+      # ---------------------------------------------------------------------
+      # AI Providers (at least one required)
+      # ---------------------------------------------------------------------
+      - ZAI_API_KEY=${ZAI_API_KEY:-}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - VENICE_API_KEY=${VENICE_API_KEY:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+      - AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:-}
+      - SYNTHETIC_API_KEY=${SYNTHETIC_API_KEY:-}
+      - XIAOMI_API_KEY=${XIAOMI_API_KEY:-}
+      
+      # AWS Bedrock (optional)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - BEDROCK_PROVIDER_FILTER=${BEDROCK_PROVIDER_FILTER:-anthropic}
+      
+      # Ollama (optional)
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      
+      # Deepgram (optional)
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      
+      # ---------------------------------------------------------------------
+      # Model Selection
+      # ---------------------------------------------------------------------
+      - OPENCLAW_PRIMARY_MODEL=${OPENCLAW_PRIMARY_MODEL:-}
+      
+      # ---------------------------------------------------------------------
+      # Authentication
+      # ---------------------------------------------------------------------
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      
+      # ---------------------------------------------------------------------
+      # Gateway Configuration
+      # ---------------------------------------------------------------------
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
+      
+      # ---------------------------------------------------------------------
+      # Storage Paths
+      # ---------------------------------------------------------------------
+      - OPENCLAW_STATE_DIR=/data/.openclaw
+      - OPENCLAW_WORKSPACE_DIR=/data/workspace
+      - OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
+      - OPENCLAW_CUSTOM_CONFIG=/app/config/openclaw.json
+      
+      # ---------------------------------------------------------------------
+      # Browser Tool Configuration
+      # ---------------------------------------------------------------------
+      - BROWSER_CDP_URL=${BROWSER_CDP_URL:-}
+      - BROWSER_DEFAULT_PROFILE=${BROWSER_DEFAULT_PROFILE:-}
+      - BROWSER_EVALUATE_ENABLED=${BROWSER_EVALUATE_ENABLED:-}
+      - BROWSER_SNAPSHOT_MODE=${BROWSER_SNAPSHOT_MODE:-}
+      - BROWSER_REMOTE_TIMEOUT_MS=${BROWSER_REMOTE_TIMEOUT_MS:-}
+      - BROWSER_REMOTE_HANDSHAKE_TIMEOUT_MS=${BROWSER_REMOTE_HANDSHAKE_TIMEOUT_MS:-}
+      
+      # ---------------------------------------------------------------------
+      # Hooks (Webhook Automation)
+      # ---------------------------------------------------------------------
+      - HOOKS_ENABLED=${HOOKS_ENABLED:-}
+      - HOOKS_TOKEN=${HOOKS_TOKEN:-}
+      - HOOKS_PATH=${HOOKS_PATH:-/hooks}
+      
+      # ---------------------------------------------------------------------
+      # WhatsApp Configuration
+      # ---------------------------------------------------------------------
+      - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-}
+      - WHATSAPP_DM_POLICY=${WHATSAPP_DM_POLICY:-pairing}
+      - WHATSAPP_ALLOW_FROM=${WHATSAPP_ALLOW_FROM:-}
+      - WHATSAPP_GROUP_POLICY=${WHATSAPP_GROUP_POLICY:-}
+      - WHATSAPP_GROUP_ALLOW_FROM=${WHATSAPP_GROUP_ALLOW_FROM:-}
+      - WHATSAPP_SELF_CHAT_MODE=${WHATSAPP_SELF_CHAT_MODE:-}
+      - WHATSAPP_MEDIA_MAX_MB=${WHATSAPP_MEDIA_MAX_MB:-}
+      - WHATSAPP_HISTORY_LIMIT=${WHATSAPP_HISTORY_LIMIT:-}
+      
+      # ---------------------------------------------------------------------
+      # Telegram Configuration
+      # ---------------------------------------------------------------------
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_DM_POLICY=${TELEGRAM_DM_POLICY:-pairing}
+      - TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM:-}
+      - TELEGRAM_GROUP_POLICY=${TELEGRAM_GROUP_POLICY:-}
+      - TELEGRAM_GROUP_ALLOW_FROM=${TELEGRAM_GROUP_ALLOW_FROM:-}
+      
+      # ---------------------------------------------------------------------
+      # Discord Configuration
+      # ---------------------------------------------------------------------
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_DM_POLICY=${DISCORD_DM_POLICY:-pairing}
+      - DISCORD_DM_ALLOW_FROM=${DISCORD_DM_ALLOW_FROM:-}
+      - DISCORD_GROUP_POLICY=${DISCORD_GROUP_POLICY:-}
+      
+      # ---------------------------------------------------------------------
+      # Slack Configuration
+      # ---------------------------------------------------------------------
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      - SLACK_DM_POLICY=${SLACK_DM_POLICY:-pairing}
+      - SLACK_GROUP_POLICY=${SLACK_GROUP_POLICY:-}
+      
+      # ---------------------------------------------------------------------
+      # 1Password Integration
+      # ---------------------------------------------------------------------
+      - OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN:-}
+      
+      # ---------------------------------------------------------------------
+      # GOG/Galaxy
+      # ---------------------------------------------------------------------
+      - GOG_KEYRING_PASSWORD=${GOG_KEYRING_PASSWORD:-}
+      
+      # ---------------------------------------------------------------------
+      # Extra Packages
+      # ---------------------------------------------------------------------
+      - OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES:-}
+      
+      # ---------------------------------------------------------------------
+      # Port Configuration
+      # ---------------------------------------------------------------------
+      - PORT=${PORT:-8080}
+      
+      # ---------------------------------------------------------------------
+      # Node Environment
+      # ---------------------------------------------------------------------
+      - NODE_ENV=production
+    
+    # Volumes for persistence
+    volumes:
+      # Main data directory - persists config, sessions, skills, plugins
+      - type: bind
+        source: ${OPENCLAW_DATA_DIR:-./data/.openclaw}
+        target: /data/.openclaw
+      
+      # Workspace directory - for agent projects
+      - type: bind
+        source: ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}
+        target: /data/workspace
+      
+      # Custom configuration file (optional)
+      - type: bind
+        source: ${OPENCLAW_CUSTOM_CONFIG:-./config/openclaw.json}
+        target: /app/config/openclaw.json
+        read_only: true
+      
+      # Logs directory
+      - type: bind
+        source: ${OPENCLAW_LOGS_DIR:-./logs}
+        target: /var/log/openclaw
+      
+      # NPM cache persistence (for skills/plugins)
+      - type: volume
+        source: openclaw-npm-cache
+        target: /data/.openclaw/npm
+      
+      # Homebrew persistence
+      - type: volume
+        source: openclaw-brew-cache
+        target: /data/.openclaw/brew
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    
+    # Restart policy for 24/7 operation
+    restart: unless-stopped
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    
+    # Networks
+    networks:
+      - openclaw-network
+    
+    # Depends on browser if using browser automation
+    depends_on:
+      browser:
+        condition: service_started
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service"
+        env: "NODE_ENV"
+
+  # ===========================================================================
+  # Browser Sidecar - For Web Automation
+  # ===========================================================================
+  browser:
+    image: ghcr.io/openclaw/openclaw-browser:latest
+    # Alternative: use kasmweb/chrome or similar
+    # image: kasmweb/chrome:1.15.0
+    
+    container_name: openclaw-browser
+    hostname: browser
+    
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - CHROME_CLI=--remote-debugging-port=9222 --no-sandbox --disable-dev-shm-usage
+    
+    volumes:
+      - type: volume
+        source: browser-data
+        target: /config
+    
+    # Shared memory for Chrome
+    shm_size: 2g
+    
+    # No ports exposed - accessed internally via CDP
+    
+    restart: unless-stopped
+    
+    networks:
+      - openclaw-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9222/json/version"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  openclaw-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  openclaw-npm-cache:
+    driver: local
+  openclaw-brew-cache:
+    driver: local
+  browser-data:
+    driver: local

@@ -1,0 +1,415 @@
+# OpenClaw Docker
+
+[![Docker Build](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml/badge.svg)](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A production-ready Docker setup for [OpenClaw](https://github.com/openclaw/openclaw) - the self-hosted AI agent gateway that connects your favorite chat apps to AI coding agents.
+
+## Features
+
+- **Debian Bookworm (LTS) Base** - Stable and secure foundation
+- **Multi-Architecture Support** - AMD64 and ARM64 builds
+- **Environment Variable Configuration** - Configure everything via `.env` file
+- **Persistent Data Storage** - Config, sessions, skills, plugins, and npm packages survive container restarts
+- **Nginx Reverse Proxy** - Built-in authentication and rate limiting
+- **Browser Automation** - Optional Chrome sidecar for web automation
+- **Health Checks & Auto-Restart** - Designed for 24/7 operation
+- **Security Hardened** - Non-root user, minimal capabilities, security headers
+
+## Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/openclaw/openclaw-docker.git
+cd openclaw-docker
+```
+
+### 2. Configure Environment Variables
+
+```bash
+cp .env.example .env
+# Edit .env with your favorite editor
+nano .env
+```
+
+At minimum, you need to set:
+- One AI provider API key (e.g., `ANTHROPIC_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`)
+- `AUTH_PASSWORD` for web UI protection
+- `OPENCLAW_GATEWAY_TOKEN` for API access
+
+### 3. Start OpenClaw
+
+```bash
+docker compose up -d
+```
+
+### 4. Access the Web Interface
+
+Open your browser to `http://localhost:8080` and log in with:
+- Username: `admin` (or your `AUTH_USERNAME`)
+- Password: Your `AUTH_PASSWORD`
+
+## Configuration
+
+### AI Providers
+
+At least one AI provider API key is required:
+
+| Provider | Environment Variable |
+|----------|---------------------|
+| Anthropic | `ANTHROPIC_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| Google Gemini | `GEMINI_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Cerebras | `CEREBRAS_API_KEY` |
+| Moonshot Kimi | `KIMI_API_KEY` |
+| Z.AI | `ZAI_API_KEY` |
+| OpenCode | `OPENCODE_API_KEY` |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
+
+### Model Selection
+
+Set your preferred model:
+
+```env
+OPENCLAW_PRIMARY_MODEL=anthropic/claude-sonnet-4-5-20250929
+```
+
+Popular options:
+- `anthropic/claude-sonnet-4-5-20250929` - Claude Sonnet 4.5
+- `anthropic/claude-opus-4-5-20250929` - Claude Opus 4.5
+- `openrouter/anthropic/claude-opus-4-5` - Claude via OpenRouter
+- `google/gemini-2.5-pro` - Gemini Pro
+- `opencode/kimi-k2.5` - Kimi K2.5
+- `zai/glm-4.7` - Z.AI GLM-4.7
+
+### Data Persistence
+
+The following directories are persisted:
+
+| Host Path | Container Path | Contents |
+|-----------|---------------|----------|
+| `/mnt/shuttle/share/app-data/openclaw3` | `/data/.openclaw` | Config, sessions, skills, plugins |
+| `/mnt/shuttle/share/app-data/openclaw3/workspace` | `/data/workspace` | Agent projects |
+| `./logs` | `/var/log/openclaw` | Application logs |
+
+### WhatsApp Configuration
+
+```env
+WHATSAPP_ENABLED=true
+WHATSAPP_DM_POLICY=pairing
+WHATSAPP_ALLOW_FROM=+1234567890,+0987654321
+```
+
+When enabled, scan the QR code in the logs to pair:
+
+```bash
+docker compose logs -f openclaw
+```
+
+### Telegram Configuration
+
+```env
+TELEGRAM_BOT_TOKEN=your-bot-token-from-botfather
+TELEGRAM_DM_POLICY=pairing
+```
+
+### Discord Configuration
+
+```env
+DISCORD_BOT_TOKEN=your-bot-token
+DISCORD_DM_POLICY=pairing
+```
+
+### Browser Automation
+
+Enable browser automation with the included Chrome sidecar:
+
+```env
+BROWSER_CDP_URL=http://browser:9222
+BROWSER_DEFAULT_PROFILE=openclaw
+BROWSER_EVALUATE_ENABLED=true
+```
+
+Access the browser desktop via noVNC at `http://localhost:8080/browser/`
+
+### Webhook Hooks
+
+Enable webhook automation:
+
+```env
+HOOKS_ENABLED=true
+HOOKS_TOKEN=your-secret-hook-token
+```
+
+Trigger actions via:
+
+```bash
+curl -X POST http://localhost:8080/hooks/wake \
+  -H "Authorization: Bearer your-secret-hook-token"
+```
+
+## Docker Compose Examples
+
+### Minimal Setup
+
+```yaml
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw-docker:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - ANTHROPIC_API_KEY=sk-ant-...
+      - AUTH_PASSWORD=secure-password
+      - OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+    volumes:
+      - ./data:/data/.openclaw
+    restart: unless-stopped
+```
+
+### Full Setup with All Features
+
+See the included [`docker-compose.yml`](docker-compose.yml) for a complete example with:
+- Browser automation sidecar
+- All channel integrations
+- Persistent volumes
+- Health checks
+- Resource limits
+
+### Using Pre-built Image
+
+```yaml
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw-docker:latest
+    # ... rest of configuration
+```
+
+### Building Locally
+
+```yaml
+services:
+  openclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OPENCLAW_VERSION: main
+    # ... rest of configuration
+```
+
+## Environment Variables Reference
+
+### Required
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ANTHROPIC_API_KEY` or other provider | AI provider API key | - |
+| `AUTH_PASSWORD` | Web UI password | - |
+| `OPENCLAW_GATEWAY_TOKEN` | Gateway API token | Auto-generated |
+
+### Authentication
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AUTH_USERNAME` | Web UI username | `admin` |
+| `AUTH_PASSWORD` | Web UI password | - |
+
+### Gateway
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENCLAW_GATEWAY_TOKEN` | Bearer token for API | Auto-generated |
+| `OPENCLAW_GATEWAY_PORT` | Internal gateway port | `18789` |
+| `OPENCLAW_GATEWAY_BIND` | Bind mode (loopback/lan) | `loopback` |
+| `PORT` | External port (nginx) | `8080` |
+
+### Storage
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENCLAW_DATA_DIR` | Host path for data | `./data/.openclaw` |
+| `OPENCLAW_WORKSPACE_DIR` | Host path for workspace | `./data/workspace` |
+| `OPENCLAW_LOGS_DIR` | Host path for logs | `./logs` |
+
+### Browser
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BROWSER_CDP_URL` | Chrome DevTools URL | - |
+| `BROWSER_DEFAULT_PROFILE` | Browser profile name | - |
+| `BROWSER_EVALUATE_ENABLED` | Enable JS evaluation | `false` |
+
+### Hooks
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HOOKS_ENABLED` | Enable webhooks | `false` |
+| `HOOKS_TOKEN` | Webhook auth token | - |
+| `HOOKS_PATH` | Webhook path prefix | `/hooks` |
+
+### WhatsApp
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WHATSAPP_ENABLED` | Enable WhatsApp | `false` |
+| `WHATSAPP_DM_POLICY` | DM policy | `pairing` |
+| `WHATSAPP_ALLOW_FROM` | Allowed phone numbers | - |
+| `WHATSAPP_GROUP_POLICY` | Group policy | - |
+
+### System
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENCLAW_DOCKER_APT_PACKAGES` | Extra apt packages | - |
+| `TZ` | Timezone | `UTC` |
+
+## Updating
+
+### Automatic Updates
+
+The image includes an auto-update workflow that checks for new OpenClaw releases daily and rebuilds automatically.
+
+### Manual Update
+
+```bash
+# Pull latest image
+docker compose pull
+
+# Recreate containers
+docker compose up -d
+
+# View logs
+docker compose logs -f
+```
+
+### Update with Data Migration
+
+Your data is persisted in volumes, so updates are safe:
+
+```bash
+# Stop containers
+docker compose down
+
+# Pull latest
+docker compose pull
+
+# Start with new version
+docker compose up -d
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+Check logs:
+```bash
+docker compose logs -f openclaw
+```
+
+Common issues:
+- Missing API key: Set at least one provider API key
+- Missing auth password: Set `AUTH_PASSWORD` for production
+
+### WhatsApp Not Connecting
+
+1. Check that `WHATSAPP_ENABLED=true` is set
+2. View logs to see QR code: `docker compose logs -f openclaw`
+3. Scan QR code with WhatsApp mobile app
+
+### Browser Automation Not Working
+
+1. Ensure browser sidecar is running: `docker compose ps`
+2. Check `BROWSER_CDP_URL=http://browser:9222` is set
+3. Verify network connectivity: `docker compose exec openclaw curl http://browser:9222/json/version`
+
+### Permission Issues
+
+If you see permission errors:
+
+```bash
+# Fix ownership
+sudo chown -R 1000:1000 ./data
+
+# Or run as root (not recommended for production)
+docker compose exec --user root openclaw bash
+```
+
+### Reset Configuration
+
+To start fresh:
+
+```bash
+# Stop and remove containers
+docker compose down
+
+# Remove data (WARNING: This deletes all configuration!)
+sudo rm -rf ./data
+
+# Start fresh
+docker compose up -d
+```
+
+## Security Considerations
+
+1. **Always set `AUTH_PASSWORD`** for production deployments
+2. **Use strong `OPENCLAW_GATEWAY_TOKEN`** (generate with `openssl rand -hex 32`)
+3. **Keep API keys in `.env` file** - never commit them
+4. **Use HTTPS** in production (put behind reverse proxy with SSL)
+5. **Restrict WhatsApp/Telegram allowlists** to known contacts
+6. **Regularly update** the Docker image for security patches
+
+## Building from Source
+
+```bash
+# Clone repository
+git clone https://github.com/openclaw/openclaw-docker.git
+cd openclaw-docker
+
+# Build image
+docker build -t openclaw:local .
+
+# Or build with specific OpenClaw version
+docker build --build-arg OPENCLAW_VERSION=v2026.2.1 -t openclaw:local .
+```
+
+## CI/CD
+
+This repository includes GitHub Actions workflows for:
+
+- **Docker Build and Push** - Builds and pushes multi-arch images on every push to main
+- **Auto-Update Check** - Daily check for new OpenClaw releases
+- **Security Scanning** - Trivy vulnerability scanning
+
+Images are published to:
+- `ghcr.io/openclaw/openclaw-docker:latest`
+- `ghcr.io/openclaw/openclaw-docker:<version>`
+- `ghcr.io/openclaw/openclaw-docker:<sha>`
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## Support
+
+- [OpenClaw Documentation](https://docs.openclaw.ai/)
+- [OpenClaw GitHub](https://github.com/openclaw/openclaw)
+- [Discord Community](https://discord.gg/openclaw)
+
+## Acknowledgments
+
+- [OpenClaw](https://github.com/openclaw/openclaw) - The amazing AI agent gateway
+- [coollabsio/openclaw](https://github.com/coollabsio/openclaw) - Inspiration for Docker setup

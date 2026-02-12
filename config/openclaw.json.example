@@ -1,0 +1,52 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/data/workspace",
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5-20250929",
+        "fallbacks": [
+          "openrouter/anthropic/claude-sonnet-4-5",
+          "google/gemini-2.5-pro"
+        ]
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "pairing",
+      "allowFrom": [],
+      "groups": {
+        "policy": "allowlist",
+        "requireMention": true
+      }
+    },
+    "telegram": {
+      "dmPolicy": "pairing"
+    },
+    "discord": {
+      "dmPolicy": "pairing"
+    }
+  },
+  "messages": {
+    "groupChat": {
+      "mentionPatterns": [
+        "@openclaw",
+        "@bot"
+      ]
+    }
+  },
+  "gateway": {
+    "bind": "loopback"
+  },
+  "hooks": {
+    "enabled": false,
+    "path": "/hooks"
+  },
+  "tools": {
+    "browser": {
+      "cdpUrl": "http://browser:9222",
+      "defaultProfile": "openclaw",
+      "evaluateEnabled": false
+    }
+  }
+}
