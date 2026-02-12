@@ -136,6 +136,13 @@ BROWSER_EVALUATE_ENABLED=true
 
 Access the browser desktop via noVNC at `http://localhost:8080/browser/`
 
+**Note:** The browser sidecar must provide noVNC on port `6080`. The `/browser/` route proxies to `browser:6080/vnc.html`. 
+
+Example browser image that includes noVNC on port 6080:
+- `ghcr.io/n00b001/chrome-container:latest`
+
+When using a custom browser image, ensure it exposes noVNC on port 6080.
+
 ### Webhook Hooks
 
 Enable webhook automation:
@@ -332,8 +339,8 @@ Common issues:
 If you see permission errors:
 
 ```bash
-# Fix ownership
-sudo chown -R 1000:1000 ./data
+# Fix ownership (OpenClaw runs as UID/GID 1001)
+sudo chown -R 1001:1001 ./data
 
 # Or run as root (not recommended for production)
 docker compose exec --user root openclaw bash

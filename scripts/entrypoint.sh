@@ -243,6 +243,50 @@ server {
         proxy_buffering off;
         proxy_cache off;
     }
+    
+    # Browser noVNC access (requires browser sidecar with noVNC on port 6080)
+    # The browser host should provide noVNC on port 6080
+    location /browser/ {
+        proxy_pass http://browser:6080/vnc.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support for noVNC
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts for long-lived VNC sessions
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        
+        # Buffer settings
+        proxy_buffering off;
+        proxy_cache off;
+    }
+    
+    # noVNC websockify endpoint
+    location /websockify {
+        proxy_pass http://browser:6080/websockify;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts for long-lived connections
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        
+        # Disable buffering for real-time communication
+        proxy_buffering off;
+    }
 }
 EOF
 

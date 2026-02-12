@@ -131,8 +131,9 @@ RUN ARCH=$(dpkg --print-architecture) \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running OpenClaw
-RUN groupadd -r openclaw -g 1000 \
-    && useradd -r -g openclaw -u 1000 -m -s /bin/bash openclaw \
+# Use UID/GID 1001 to avoid conflicts with existing users in base image
+RUN groupadd -r openclaw -g 1001 \
+    && useradd -r -g openclaw -u 1001 -m -s /bin/bash openclaw \
     && usermod -aG sudo openclaw \
     && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw
 
@@ -150,7 +151,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /opt/openclaw/app/openclaw.mj
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
-    && chown -R openclaw:openclaw /data /var/log/openclaw
+    && chown -R openclaw:openclaw /data /var/log/openclaw \
+    && chown -R openclaw:openclaw /var/log/nginx
 
 # Remove default nginx site
 RUN rm -f /etc/nginx/sites-enabled/default
