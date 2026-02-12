@@ -1,0 +1,35 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Data directories
+data/
+logs/
+config/openclaw.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar.gz
+*.zip
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Version tracking (auto-generated)
+.openclaw-version

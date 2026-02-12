@@ -1,0 +1,142 @@
+# =============================================================================
+# OpenClaw Docker Auto-Update Workflow
+# =============================================================================
+# This workflow automatically rebuilds the Docker image when OpenClaw
+# releases a new version.
+# =============================================================================
+
+name: Auto-Update Check
+
+on:
+  # Allow manual triggering only
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ===========================================================================
+  # Check for OpenClaw Updates
+  # ===========================================================================
+  check-update:
+    name: Check for OpenClaw Updates
+    runs-on: ubuntu-latest
+    
+    outputs:
+      has_update: ${{ steps.check.outputs.has_update }}
+      latest_version: ${{ steps.check.outputs.latest_version }}
+      current_version: ${{ steps.check.outputs.current_version }}
+    
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout repository
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # -----------------------------------------------------------------------
+      # Get latest OpenClaw version
+      # -----------------------------------------------------------------------
+      - name: Get latest OpenClaw version
+        id: check
+        run: |
+          # Get the latest release tag from OpenClaw repo
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name // "main"')
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          
+          # Get current version from our last build (if tracked)
+          if [ -f .openclaw-version ]; then
+            CURRENT_VERSION=$(cat .openclaw-version)
+          else
+            CURRENT_VERSION="unknown"
+          fi
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if update is needed
+          if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "has_update=true" >> $GITHUB_OUTPUT
+            echo "New version available: $LATEST_VERSION (current: $CURRENT_VERSION)"
+          else
+            echo "has_update=false" >> $GITHUB_OUTPUT
+            echo "No update needed. Current version: $CURRENT_VERSION"
+          fi
+
+  # ===========================================================================
+  # Trigger Build if Update Available
+  # ===========================================================================
+  trigger-build:
+    name: Trigger Build
+    runs-on: ubuntu-latest
+    needs: check-update
+    if: needs.check-update.outputs.has_update == 'true'
+    
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout repository
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # -----------------------------------------------------------------------
+      # Update version file
+      # -----------------------------------------------------------------------
+      - name: Update version file
+        run: |
+          echo "${{ needs.check-update.outputs.latest_version }}" > .openclaw-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .openclaw-version
+          git commit -m "chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}" || true
+          git push || true
+      
+      # -----------------------------------------------------------------------
+      # Trigger build workflow
+      # -----------------------------------------------------------------------
+      - name: Trigger build workflow
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Docker Build and Push
+          token: ${{ secrets.GITHUB_TOKEN }}
+          inputs: '{"version": "${{ needs.check-update.outputs.latest_version }}"}'
+      
+      # -----------------------------------------------------------------------
+      # Create issue for tracking
+      # -----------------------------------------------------------------------
+      - name: Create tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🔄 Auto-update: OpenClaw ${{ needs.check-update.outputs.latest_version }}`;
+            const body = `## OpenClaw Update Available
+            
+            A new version of OpenClaw has been detected and a build has been triggered.
+            
+            - **New Version:** ${{ needs.check-update.outputs.latest_version }}
+            - **Previous Version:** ${{ needs.check-update.outputs.current_version }}
+            - **Build Workflow:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/workflows/docker-build.yml)
+            
+            ### Changes
+            See [OpenClaw Release Notes](https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.latest_version }})
+            
+            ### Docker Images
+            Once the build completes, the following images will be available:
+            - \`ghcr.io/${{ github.repository }}:latest\`
+            - \`ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.latest_version }}\`
+            
+            ---
+            *This issue was automatically created by the auto-update workflow.*`;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['automated', 'update']
+            });
