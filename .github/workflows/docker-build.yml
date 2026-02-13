@@ -3,10 +3,12 @@
 # =============================================================================
 # This workflow builds and pushes Docker images to GitHub Container Registry
 # (ghcr.io) on every push to main and on new tags.
+# Then tests are run which pull from ghcr.io and validate.
+# Only pushes tags, not main branch, to avoid unnecessary builds.
 # =============================================================================
-
+ 
 name: Docker Build and Push
-
+ 
 on:
   # Build on push to main branch (any commit)
   push:
@@ -20,9 +22,9 @@ on:
       - '.github/workflows/docker-build.yml'
     tags:
       - 'v*'
-      - '[0-9]+.[0-9]+.[0-9]+'
-  
-  # Build on pull requests (but don't push)
+      - '[0-9]+.[0-9]+'
+ 
+  # Build on pull requests (validate changes before merging)
   pull_request:
     branches:
       - main
@@ -32,42 +34,24 @@ on:
       - 'scripts/**'
       - 'nginx.conf'
       - '.github/workflows/docker-build.yml'
-  
-  # Allow manual triggering
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'OpenClaw version to build (git ref)'
-        required: false
-        default: 'main'
-        type: string
-  
-  # Allow being called by other workflows (manual-release.yml)
-  workflow_call:
-    inputs:
-      version:
-        description: 'Version tag to build'
-        required: true
-        type: string
-
-# Environment variables
+ 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   OPENCLAW_VERSION: ${{ github.event.inputs.version || 'main' }}
-
+ 
+# Allow being called by other workflows (manual-release.yml)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+ 
 # Permissions for GitHub Container Registry
 permissions:
   contents: read
   packages: write
   attestations: write
   id-token: write
-
-# Cancel pending or in-progress runs when a newer commit is pushed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+ 
 jobs:
   # ===========================================================================
   # Build Docker Image
@@ -75,31 +59,26 @@ jobs:
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+ 
     steps:
-      # -----------------------------------------------------------------------
       # Checkout repository
-      # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      # -----------------------------------------------------------------------
       # Set up QEMU for cross-platform builds
-      # -----------------------------------------------------------------------
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       
-      # -----------------------------------------------------------------------
       # Set up Docker Buildx
-      # -----------------------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      # -----------------------------------------------------------------------
       # Extract metadata for Docker
-      # -----------------------------------------------------------------------
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -108,48 +87,36 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{ env.OPENCLAW_VERSION }}
             type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch }}
           labels: |
             org.opencontainers.image.title=OpenClaw
             org.opencontainers.image.description=Self-hosted AI agent gateway
             org.opencontainers.image.vendor=OpenClaw Community
             org.opencontainers.image.licenses=MIT
       
-      # -----------------------------------------------------------------------
-       # Build and push Docker image
-       # -----------------------------------------------------------------------
-       - name: Build and push Docker image
-         id: build-and-push
-         uses: docker/build-push-action@v6
-         with:
-           context: .
-           file: ./Dockerfile
-           platforms: linux/amd64
-           push: true
-           tags: |
-             type=ref,event=branch
-             type=ref,event=pr
-             type=semver,pattern={{version}}
-             type=semver,pattern={{major}}.{{minor}}
-             type=sha,prefix=,suffix=,format=short
-             type=raw,value=latest,enable={{is_default_branch}}
-           labels: ${{ steps.meta.outputs.labels }}
-           build-args: |
-             OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
-           cache-from: type=gha
-           cache-to: type=gha,mode=max
-       
-       # Save Docker image artifact (redundant now that we push, but kept for local testing)
-       # -----------------------------------------------------------------------
-       - name: Save Docker image artifact
-         if: github.event_name != 'pull_request'
-         run: |
-           docker save openclaw:test | gzip > openclaw-image.tar.gz
-
+      # Build and push Docker image
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{ env.OPENCLAW_VERSION }}
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+  
   # ===========================================================================
   # Smoke Test
   # ===========================================================================
@@ -157,355 +124,68 @@ jobs:
     name: Smoke Test
     runs-on: ubuntu-latest
     needs: build
+    if: ${{ github.event_name == 'pull_request' }}
     
     steps:
-      # -----------------------------------------------------------------------
       # Checkout repository
-      # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      # -----------------------------------------------------------------------
-      # Download Docker image artifact
-      # -----------------------------------------------------------------------
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
         with:
-          name: docker-image
+          fetch-depth: 0
       
-      # -----------------------------------------------------------------------
-       # Load Docker image
-       # -----------------------------------------------------------------------
-      - name: Load Docker image
+      # Pull image from ghcr.io
+      - name: Pull Docker image
         run: |
-          docker load < openclaw-image.tar.gz
-          docker tag openclaw:test openclaw:smoke-test
-          
-      # Verify image is loaded
-      - name: Verify Docker image loaded
-        run: |
-          if docker image inspect openclaw:smoke-test > /dev/null; then
-            echo "Image openclaw:smoke-test is loaded successfully"
-          else
-            echo "FAILED: Image openclaw:smoke-test not found after load"
-            exit 1
-          fi
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
       
-      # -----------------------------------------------------------------------
-      # Set up Docker Buildx
-      # -----------------------------------------------------------------------
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      # -----------------------------------------------------------------------
-      # Free up disk space
-      # -----------------------------------------------------------------------
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          docker system prune -af
-      
-      # -----------------------------------------------------------------------
       # Run smoke test
-      # -----------------------------------------------------------------------
       - name: Run smoke test
         run: |
           chmod +x scripts/smoke-test.sh
           ./scripts/smoke-test.sh
         timeout-minutes: 15
       
-      # -----------------------------------------------------------------------
       # Upload logs on failure
-      # -----------------------------------------------------------------------
       - name: Upload logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-test-logs
-          path: |
-            /tmp/build.log
-            /tmp/compose.log
-            /tmp/doctor.log
-          retention-days: 3
-      
-      # -----------------------------------------------------------------------
-      # Cleanup
-      # -----------------------------------------------------------------------
-      - name: Cleanup
-        if: always()
-        run: |
-          docker compose -f docker-compose.test.yml down -v --remove-orphans 2>/dev/null || true
-          docker system prune -af
-
+          uses: actions/upload-artifact@v4
+          with:
+            name: smoke-test-logs
+            path: |
+              /tmp/build.log
+              /tmp/compose.log
+              /tmp/doctor.log
+            retention-days: 3
+  
   # ===========================================================================
-  # Security Scan
+  # Security Scan (only on PRs)
   # ===========================================================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build
-    
-    permissions:
-      contents: read
-      packages: read
-      security-events: write
+    if: ${{ github.event_name == 'pull_request' }}
     
     steps:
-      # -----------------------------------------------------------------------
-      # Download Docker image artifact
-      # -----------------------------------------------------------------------
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-      
-      # -----------------------------------------------------------------------
-      # Load Docker image
-      # -----------------------------------------------------------------------
-      - name: Load Docker image
+      # Pull image from ghcr.io
+      - name: Pull Docker image for scan
         run: |
-          docker load < openclaw-image.tar.gz
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
       
-      # -----------------------------------------------------------------------
       # Run Trivy vulnerability scanner
-      # -----------------------------------------------------------------------
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: openclaw:test
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
           ignore-unfixed: true
       
-      # -----------------------------------------------------------------------
-      # Upload scan results
-      # -----------------------------------------------------------------------
+      # Upload scan results to GitHub Security
       - name: Upload scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
-
-  # ===========================================================================
-  # Test Image
-  # ===========================================================================
-  test:
-    name: Test Docker Image
-    runs-on: ubuntu-latest
-    needs: build
-    
-    steps:
-      # -----------------------------------------------------------------------
-      # Download Docker image artifact
-      # -----------------------------------------------------------------------
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-      
-      # -----------------------------------------------------------------------
-      # Load Docker image
-      # -----------------------------------------------------------------------
-      - name: Load Docker image
-        run: |
-          docker load < openclaw-image.tar.gz
-      
-      # -----------------------------------------------------------------------
-      # Test that openclaw binary exists and is executable
-      # -----------------------------------------------------------------------
-      - name: Test openclaw binary
-        run: |
-          docker run --rm --entrypoint /bin/bash openclaw:test -c "which openclaw"
-      
-      # -----------------------------------------------------------------------
-      # Test that the container starts and passes validation checks
-      # -----------------------------------------------------------------------
-      - name: Test container startup
-        run: |
-          # Use a dummy Anthropic API key format (sk-ant-...)
-          docker run -d --name test-openclaw -e OPENCLAW_GATEWAY_TOKEN=test-token -e ANTHROPIC_API_KEY=sk-ant-dummy-test-key-for-validation-only -p 8080:8080 openclaw:test
-          
-          # Wait for startup and check if container is still running
-          sleep 30
-          
-          # Check if container is running (if it passes validation, it stays up)
-          if docker ps | grep -q test-openclaw; then
-            echo "Container is running successfully"
-            # Try health endpoint
-            curl -f http://localhost:8080/healthz || echo "Health check not responding yet"
-          else
-            echo "Container exited, checking logs..."
-            docker logs test-openclaw || true
-            # If it failed due to validation, that's expected - the image structure is valid
-            echo "Container exited (may be due to invalid API key, which is expected)"
-          fi
-          
-          # Cleanup
-          docker stop test-openclaw 2>/dev/null || true
-          docker rm test-openclaw 2>/dev/null || true
-
-  # ===========================================================================
-  # Push Docker Image
-  # ===========================================================================
-  push:
-    name: Push Docker Image
-    runs-on: ubuntu-latest
-    needs: [build, smoke-test, security-scan, test]
-    
-    steps:
-      # -----------------------------------------------------------------------
-      # Checkout repository
-      # -----------------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      # -----------------------------------------------------------------------
-      # Set up QEMU for cross-platform builds
-      # -----------------------------------------------------------------------
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      
-      # -----------------------------------------------------------------------
-      # Set up Docker Buildx
-      # -----------------------------------------------------------------------
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      # -----------------------------------------------------------------------
-      # Login to GitHub Container Registry
-      # -----------------------------------------------------------------------
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      # -----------------------------------------------------------------------
-      # Extract metadata for Docker
-      # -----------------------------------------------------------------------
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=,suffix=,format=short
-            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
-            type=raw,value=latest,enable={{is_default_branch && github.event_name != 'pull_request'}}
-          labels: |
-            org.opencontainers.image.title=OpenClaw
-            org.opencontainers.image.description=Self-hosted AI agent gateway
-            org.opencontainers.image.vendor=OpenClaw Community
-            org.opencontainers.image.licenses=MIT
-      
-      # -----------------------------------------------------------------------
-      # Build and push Docker image
-      # -----------------------------------------------------------------------
-      - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ===========================================================================
-  # Create Release
-  # ===========================================================================
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: push
-    if: github.event_name == 'workflow_call' || startsWith(github.ref, 'refs/tags/')
-    
-    permissions:
-      contents: write
-    
-    steps:
-      # -----------------------------------------------------------------------
-      # Checkout repository
-      # -----------------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      # -----------------------------------------------------------------------
-      # Determine version
-      # -----------------------------------------------------------------------
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_call" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${{ github.ref_name }}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-      
-      # -----------------------------------------------------------------------
-      # Create release
-      # -----------------------------------------------------------------------
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: OpenClaw Docker ${{ steps.version.outputs.version }}
-          body: |
-            ## OpenClaw Docker Image ${{ steps.version.outputs.version }}
-            
-            ### Docker Images
-            
-            - `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}`
-            - `ghcr.io/${{ github.repository }}:latest`
-            
-            ### Usage
-            
-            ```yaml
-            # docker-compose.yml
-            services:
-              openclaw:
-                image: ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
-                ports:
-                  - "8080:8080"
-                environment:
-                  - ANTHROPIC_API_KEY=your-api-key
-                  - AUTH_PASSWORD=your-password
-                  - OPENCLAW_GATEWAY_TOKEN=your-token
-                volumes:
-                  - ./data:/data/.openclaw
-            ```
-            
-            ### Quick Start
-            
-            ```bash
-            # Pull the image
-            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
-            
-            # Run with docker-compose
-            docker compose up -d
-            ```
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
