@@ -120,40 +120,35 @@ jobs:
             org.opencontainers.image.licenses=MIT
       
       # -----------------------------------------------------------------------
-      # Build Docker image (no push yet)
-      # -----------------------------------------------------------------------
-      - name: Build Docker image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: openclaw:test
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      # -----------------------------------------------------------------------
-      # Save Docker image for tests
-      # -----------------------------------------------------------------------
-      - name: Save Docker image
-        run: |
-          docker save openclaw:test | gzip > openclaw-image.tar.gz
-      
-      # -----------------------------------------------------------------------
-      # Upload Docker image artifact
-      # -----------------------------------------------------------------------
-      - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: openclaw-image.tar.gz
-          retention-days: 1
+       # Build and push Docker image
+       # -----------------------------------------------------------------------
+       - name: Build and push Docker image
+         id: build-and-push
+         uses: docker/build-push-action@v6
+         with:
+           context: .
+           file: ./Dockerfile
+           platforms: linux/amd64
+           push: true
+           tags: |
+             type=ref,event=branch
+             type=ref,event=pr
+             type=semver,pattern={{version}}
+             type=semver,pattern={{major}}.{{minor}}
+             type=sha,prefix=,suffix=,format=short
+             type=raw,value=latest,enable={{is_default_branch}}
+           labels: ${{ steps.meta.outputs.labels }}
+           build-args: |
+             OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
+           cache-from: type=gha
+           cache-to: type=gha,mode=max
+       
+       # Save Docker image artifact (redundant now that we push, but kept for local testing)
+       # -----------------------------------------------------------------------
+       - name: Save Docker image artifact
+         if: github.event_name != 'pull_request'
+         run: |
+           docker save openclaw:test | gzip > openclaw-image.tar.gz
 
   # ===========================================================================
   # Smoke Test
