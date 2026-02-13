@@ -249,7 +249,7 @@ function buildConfig() {
     // Gateway Configuration
     // =========================================================================
     if (process.env.OPENCLAW_GATEWAY_TOKEN) {
-        config.gateway.token = process.env.OPENCLAW_GATEWAY_TOKEN;
+        config.gateway.auth = { token: process.env.OPENCLAW_GATEWAY_TOKEN };
     }
     if (process.env.OPENCLAW_GATEWAY_BIND) {
         config.gateway.bind = process.env.OPENCLAW_GATEWAY_BIND;

@@ -322,9 +322,11 @@ command=openclaw gateway --port ${GATEWAY_PORT} --bind loopback
 autostart=true
 autorestart=true
 priority=20
-stdout_logfile=/var/log/supervisor/openclaw.log
-stderr_logfile=/var/log/supervisor/openclaw-error.log
-environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",NODE_ENV="production"
 EOF
 
 # =============================================================================
