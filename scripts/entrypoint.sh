@@ -30,9 +30,14 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # =============================================================================
 if [ "$(id -u)" = "0" ]; then
     log_info "Running as root, fixing permissions for openclaw user..."
-    chown -R openclaw:openclaw /data 2>/dev/null || true
-    chown -R openclaw:openclaw /var/log/openclaw 2>/dev/null || true
-    chown -R openclaw:openclaw /var/log/supervisor 2>/dev/null || true
+    
+    # Only chown if we're about to switch to openclaw user
+    # This prevents permission issues with bind mounts
+    if id openclaw >/dev/null 2>&1; then
+        chown -R openclaw:openclaw /data 2>/dev/null || true
+        chown -R openclaw:openclaw /var/log/openclaw 2>/dev/null || true
+        chown -R openclaw:openclaw /var/log/supervisor 2>/dev/null || true
+    fi
     
     # Re-run this script as openclaw user
     log_info "Switching to openclaw user..."
