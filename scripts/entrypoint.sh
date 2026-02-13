@@ -167,13 +167,6 @@ log_info "Configuring Nginx..."
 tee /etc/nginx/sites-available/openclaw > /dev/null << 'EOF'
 # OpenClaw Nginx Configuration
 
-# Temp directories for non-root nginx
-client_body_temp_path /tmp/nginx/client_body;
-proxy_temp_path /tmp/nginx/proxy;
-fastcgi_temp_path /tmp/nginx/fastcgi;
-uwsgi_temp_path /tmp/nginx/uwsgi;
-scgi_temp_path /tmp/nginx/scgi;
-
 # Upstream for OpenClaw Gateway
 upstream openclaw_gateway {
     server 127.0.0.1:18789;

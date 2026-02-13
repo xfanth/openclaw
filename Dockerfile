@@ -164,7 +164,8 @@ RUN rm -f /etc/nginx/sites-enabled/default \
     && mkdir -p /var/log/nginx \
     && chown -R openclaw:openclaw /var/log/nginx \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
-    && chown -R openclaw:openclaw /tmp/nginx
+    && chown -R openclaw:openclaw /tmp/nginx \
+    && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf
 
 # Copy scripts and configuration
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
