@@ -296,6 +296,12 @@ nginx -t || {
 }
 
 # =============================================================================
+# Fix legacy config keys
+# =============================================================================
+log_info "Running openclaw doctor to fix legacy config..."
+openclaw doctor --fix || true
+
+# =============================================================================
 # Create supervisord configuration
 # =============================================================================
 log_info "Creating supervisord configuration..."
