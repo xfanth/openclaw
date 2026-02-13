@@ -30,6 +30,3 @@ build/
 *.tmp
 *.temp
 *.log
-
-# Version tracking (auto-generated)
-.openclaw-version
