@@ -67,6 +67,13 @@ log_info "Test 2: Starting services with docker-compose..."
 # Create test directories
 mkdir -p test-data test-workspace
 
+# Ensure proper permissions on test directories
+# In CI environments, fix ownership and permissions
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+    sudo chown -R $(id -u):$(id -g) test-data test-workspace 2>/dev/null || true
+    sudo chmod -R 755 test-data test-workspace 2>/dev/null || true
+fi
+
 if docker compose -f "$COMPOSE_FILE" up -d > /tmp/compose.log 2>&1; then
     log_success "Services started"
     TESTS_PASSED=$((TESTS_PASSED + 1))
