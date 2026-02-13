@@ -274,7 +274,7 @@ else
 fi
 
 # =============================================================================
-# Test 8: OpenClaw Status Check
+# Test 8: Checking OpenClaw full status...
 # =============================================================================
 log_info "Test 8: Checking OpenClaw full status..."
 
@@ -288,6 +288,49 @@ if grep -q "EACCES\|permission denied" /tmp/openclaw-status.log 2>/dev/null; the
     log_error "OpenClaw status shows permission errors"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     STATUS_ERRORS=$((STATUS_ERRORS + 1))
+fi
+
+# Check if gateway is marked as unreachable
+if grep -q "Gateway.*unreachable" /tmp/openclaw-status.log 2>/dev/null; then
+    log_error "OpenClaw status shows gateway is unreachable"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    STATUS_ERRORS=$((STATUS_ERRORS + 1))
+fi
+
+# Check for memory unavailable errors
+if grep -q "Memory.*unavailable" /tmp/openclaw-status.log 2>/dev/null; then
+    log_warn "Memory plugin is unavailable (may be expected in test environment)"
+    # Don't fail on memory warnings
+fi
+
+if [ $STATUS_ERRORS -eq 0 ]; then
+    log_success "OpenClaw status check passed"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_info "OpenClaw status output:"
+    cat /tmp/openclaw-status.log
+fi
+
+# =============================================================================
+# Test 9: Verify gateway port accessibility
+# =============================================================================
+log_info "Test 9: Verifying gateway on port 18789..."
+
+# Test gateway from within container
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw curl -f http://localhost:18789/healthz" 2>&1; then
+    log_success "Gateway is accessible on port 18789 (from within container)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Gateway is not accessible on port 18789 (from within container)"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# Verify gateway status shows correct port
+if grep -q "port=18789" /tmp/openclaw-status.log 2>/dev/null; then
+    log_success "Gateway status shows correct port (18789)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_warn "Gateway status shows unexpected port in status output"
 fi
 
 # Check if gateway is marked as unreachable
