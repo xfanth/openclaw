@@ -187,7 +187,6 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 # Copy scripts and configuration
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
 COPY --chown=openclaw:openclaw nginx.conf /etc/nginx/sites-available/openclaw
-COPY --chown=openclaw:openclaw config/openclaw.service /app/config/openclaw.service
 RUN chmod +x /app/scripts/*.sh \
     && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw
 
