@@ -181,7 +181,7 @@ RUN rm -f /etc/nginx/sites-enabled/default \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
     && chown -R openclaw:openclaw /tmp/nginx \
     && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf \
-    && sed -i '1i client_body_temp_path /tmp/nginx/client_body;\nproxy_temp_path /tmp/nginx/proxy;\nfastcgi_temp_path /tmp/nginx/fastcgi;' /etc/nginx/nginx.conf \
+    && sed -i '/^http {/a\    client_body_temp_path /tmp/nginx/client_body;\n    proxy_temp_path /tmp/nginx/proxy;\n    fastcgi_temp_path /tmp/nginx/fastcgi;' /etc/nginx/nginx.conf \
     && mkdir -p /var/log/supervisor \
     && chown -R openclaw:openclaw /var/log/supervisor \
     && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
