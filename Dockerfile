@@ -44,8 +44,7 @@ RUN set -eux; \
     done
 
 # Install dependencies and build
-RUN pnpm install --no-frozen-lockfile
-RUN pnpm build
+RUN pnpm install --no-frozen-lockfile && pnpm build
 
 # Build UI components
 ENV OPENCLAW_PREFER_PNPM=1
@@ -55,6 +54,8 @@ RUN pnpm ui:install && pnpm ui:build
 # Stage 2: Production Runtime
 # -----------------------------------------------------------------------------
 FROM node:22-bookworm
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL maintainer="OpenClaw Docker Community"
 LABEL description="OpenClaw - Self-hosted AI agent gateway"
@@ -117,11 +118,8 @@ RUN curl -fsSL https://bun.sh/install | bash \
     && ln -sf /root/.bun/bin/bun /usr/local/bin/bun \
     && ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
 
-# Install npm via Node.js (node is already installed via node:22-bookworm base)
-RUN npm install -g npm@latest
-
-# Enable corepack for pnpm and yarn
-RUN corepack enable
+# Install npm via Node.js (node is already installed via node:22-bookworm base) and enable corepack for pnpm and yarn
+RUN npm install -g npm@latest && corepack enable
 
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
