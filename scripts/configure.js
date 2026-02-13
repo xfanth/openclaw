@@ -450,6 +450,12 @@ const envConfig = buildConfig();
 deepMerge(config, envConfig);
 console.log('[configure] applied environment variables');
 
+// 4. Clean up legacy keys that cause warnings
+if (config.gateway && config.gateway.token) {
+    delete config.gateway.token;
+    console.log('[configure] removed legacy gateway.token key');
+}
+
 // =============================================================================
 // Write configuration file
 // =============================================================================
