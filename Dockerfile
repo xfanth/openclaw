@@ -10,6 +10,8 @@
 # -----------------------------------------------------------------------------
 FROM node:22-bookworm AS builder
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Install build dependencies
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -126,7 +128,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
     && apt-get update \
-    && apt-get install -y gh \
+    && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Install 1Password CLI
@@ -138,7 +140,7 @@ RUN ARCH=$(dpkg --print-architecture) \
     && mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
     && curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
     && apt-get update \
-    && apt-get install -y 1password-cli \
+    && apt-get install -y --no-install-recommends 1password-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running OpenClaw
@@ -201,7 +203,7 @@ RUN chmod +x /app/scripts/*.sh \
     && chmod +x /usr/local/bin/run-as-openclaw
 
 # Create health check script
-RUN printf '%s\n' '#!/bin/bash' 'curl -f http://localhost:${PORT:-8080}/healthz || exit 1' > /app/scripts/healthcheck.sh \
+RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \
     && chmod +x /app/scripts/healthcheck.sh
 
 # Environment variable defaults

@@ -23,6 +23,7 @@ NC='\033[0m' # No Color
 COMPOSE_FILE="docker-compose.test.yml"
 TEST_TIMEOUT=120
 SERVICE_NAME="openclaw-test"
+IMAGE_TAG="${IMAGE_TAG:-openclaw:smoke-test}"
 
 # Counters
 TESTS_PASSED=0
@@ -46,14 +47,28 @@ cleanup() {
 trap cleanup EXIT
 
 # =============================================================================
-# Test 1: Build Docker Image
+# Test 1: Use/Build Docker Image
 # =============================================================================
-log_info "Test 1: Building Docker image..."
+log_info "Test 1: Checking Docker image..."
 
-# Check if image already exists (pre-built in CI)
-if docker image inspect openclaw:smoke-test > /dev/null 2>&1; then
+# If IMAGE_TAG is set (CI environment), verify the image exists and tag it
+if [ "$IMAGE_TAG" != "openclaw:smoke-test" ]; then
+    log_info "Using pre-built image: $IMAGE_TAG"
+    if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+        log_success "Pre-built image found"
+        # Tag the image as openclaw:smoke-test for docker-compose to use
+        docker tag "$IMAGE_TAG" openclaw:smoke-test
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "Pre-built image not found: $IMAGE_TAG"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        exit 1
+    fi
+# Otherwise, check if image already exists locally
+elif docker image inspect openclaw:smoke-test > /dev/null 2>&1; then
     log_success "Docker image already exists, skipping build"
     TESTS_PASSED=$((TESTS_PASSED + 1))
+# Build from scratch
 elif docker build -t openclaw:smoke-test . > /tmp/build.log 2>&1; then
     log_success "Docker image built successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -75,7 +90,7 @@ mkdir -p test-data test-workspace
 # Ensure proper permissions on test directories
 # In CI environments, fix ownership and permissions
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-    sudo chown -R $(id -u):$(id -g) test-data test-workspace 2>/dev/null || true
+    sudo chown -R "$(id -u):$(id -g)" test-data test-workspace 2>/dev/null || true
     sudo chmod -R 755 test-data test-workspace 2>/dev/null || true
 fi
 
@@ -140,7 +155,7 @@ log_info "Test 4: Testing HTTP endpoint..."
 
 # Try multiple times with retries
 HTTP_SUCCESS=0
-for i in 1 2 3; do
+for _ in 1 2 3; do
     if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
         HTTP_SUCCESS=1
         break

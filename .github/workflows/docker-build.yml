@@ -3,12 +3,11 @@
 # =============================================================================
 # This workflow builds and pushes Docker images to GitHub Container Registry
 # (ghcr.io) on every push to main and on new tags.
-# Then tests are run which pull from ghcr.io and validate.
-# Only pushes tags, not main branch, to avoid unnecessary builds.
+# Order: pre-commit → build (no push) → smoke test → security scan → push
 # =============================================================================
- 
+
 name: Docker Build and Push
- 
+
 on:
   # Build on push to main branch (any commit)
   push:
@@ -23,7 +22,7 @@ on:
     tags:
       - 'v*'
       - '[0-9]+.[0-9]+'
- 
+
   # Build on pull requests (validate changes before merging)
   pull_request:
     branches:
@@ -34,51 +33,80 @@ on:
       - 'scripts/**'
       - 'nginx.conf'
       - '.github/workflows/docker-build.yml'
- 
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   OPENCLAW_VERSION: ${{ github.event.inputs.version || 'main' }}
- 
+
 # Allow being called by other workflows (manual-release.yml)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
- 
+
 # Permissions for GitHub Container Registry
 permissions:
   contents: read
   packages: write
   attestations: write
   id-token: write
- 
+
 jobs:
   # ===========================================================================
-  # Build Docker Image
+  # Pre-Commit Checks
   # ===========================================================================
-  build:
-    name: Build Docker Image
+  pre-commit:
+    name: Pre-Commit Checks
     runs-on: ubuntu-latest
-    outputs:
-      tags: ${{ steps.meta.outputs.tags }}
-      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
- 
     steps:
-      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      # Set up QEMU for cross-platform builds
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pre-commit environment
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      - name: Install pre-commit
+        run: |
+          pip install pre-commit
+
+      - name: Run pre-commit on all files
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
+  # ===========================================================================
+  # Build Docker Image (no push)
+  # ===========================================================================
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: pre-commit
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
-      # Set up Docker Buildx
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      # Extract metadata for Docker
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -95,28 +123,30 @@ jobs:
             org.opencontainers.image.description=Self-hosted AI agent gateway
             org.opencontainers.image.vendor=OpenClaw Community
             org.opencontainers.image.licenses=MIT
-      
-      # Build and push Docker image
-      - name: Build and push Docker image
-        id: build
+
+      - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{ env.OPENCLAW_VERSION }}
-            type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
-            cache-from: type=gha
-            cache-to: type=gha,mode=max
-  
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}.tar
+          retention-days: 1
+
   # ===========================================================================
   # Smoke Test
   # ===========================================================================
@@ -125,39 +155,42 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: ${{ github.event_name == 'pull_request' }}
-    
+
     steps:
-      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      # Pull image from ghcr.io
-      - name: Pull Docker image
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
-      
-      # Run smoke test
+          docker load -i /tmp/${{ env.IMAGE_NAME }}-${{ needs.build.outputs.image_tag }}.tar
+
       - name: Run smoke test
         run: |
           chmod +x scripts/smoke-test.sh
           ./scripts/smoke-test.sh
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
         timeout-minutes: 15
-      
-      # Upload logs on failure
-      # -----------------------------------------------------------------------
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-            name: smoke-test-logs
-            path: |
-              /tmp/build.log
-              /tmp/compose.log
-              /tmp/doctor.log
-            retention-days: 3
-  
+          name: smoke-test-logs
+          path: |
+            /tmp/build.log
+            /tmp/compose.log
+            /tmp/doctor.log
+          retention-days: 3
+
   # ===========================================================================
   # Security Scan (only on PRs)
   # ===========================================================================
@@ -166,27 +199,84 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: ${{ github.event_name == 'pull_request' }}
-    
+
     steps:
-      # Pull image from ghcr.io
-      - name: Pull Docker image for scan
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
-      
-      # Run Trivy vulnerability scanner
+          docker load -i /tmp/${{ env.IMAGE_NAME }}-${{ needs.build.outputs.image_tag }}.tar
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.build.outputs.version }}
+          image-ref: ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
           ignore-unfixed: true
-      
-      # Upload scan results to GitHub Security
+
       - name: Upload scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+
+  # ===========================================================================
+  # Push to GHCR
+  # ===========================================================================
+  push:
+    name: Push to GHCR
+    runs-on: ubuntu-latest
+    needs: [pre-commit, build]
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{ env.OPENCLAW_VERSION }}
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest,enable={{is_default_branch }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
