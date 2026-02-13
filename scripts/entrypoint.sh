@@ -126,6 +126,9 @@ mkdir -p "$STATE_DIR/npm"
 mkdir -p "$STATE_DIR/brew"
 mkdir -p "$STATE_DIR/logs"
 
+# Create nginx directories that need proper permissions
+mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi 2>/dev/null || true
+
 # Set proper permissions
 chmod 700 "$STATE_DIR"
 chmod 700 "$STATE_DIR/credentials" 2>/dev/null || true
