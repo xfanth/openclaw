@@ -37,6 +37,8 @@ if [ "$(id -u)" = "0" ]; then
         chown -R openclaw:openclaw /data 2>/dev/null || true
         chown -R openclaw:openclaw /var/log/openclaw 2>/dev/null || true
         chown -R openclaw:openclaw /var/log/supervisor 2>/dev/null || true
+        chown -R openclaw:openclaw /var/lib/nginx 2>/dev/null || true
+        sync  # Ensure all chown operations complete before proceeding
     fi
     
     # Re-run this script as openclaw user
