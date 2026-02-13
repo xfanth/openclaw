@@ -158,6 +158,9 @@ RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
 RUN rm -f /etc/nginx/sites-enabled/default \
     && chown -R openclaw:openclaw /etc/nginx/sites-available /etc/nginx/sites-enabled \
     && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && touch /etc/nginx/.htpasswd \
+    && chown openclaw:openclaw /etc/nginx/.htpasswd \
+    && chmod 644 /etc/nginx/.htpasswd \
     && mkdir -p /var/log/nginx \
     && chown -R openclaw:openclaw /var/log/nginx \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
