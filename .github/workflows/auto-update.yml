@@ -102,7 +102,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: auto-update/${{ needs.check-update.outputs.latest_version }}
-          title: chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}
+          title: "chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}"
           body: |
             ## OpenClaw Update Available
 
@@ -129,6 +129,6 @@ jobs:
 
             ---
             *This PR was automatically created by the auto-update workflow.*
-          commit-message: chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}
+          commit-message: "chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}"
           labels: automated, update
           delete-branch: true
