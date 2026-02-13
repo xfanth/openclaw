@@ -302,7 +302,7 @@ log_info "Creating supervisord configuration..."
 
 mkdir -p /var/log/supervisor
 
-cat > /app/supervisord.conf << EOF
+cat > "$STATE_DIR/supervisord.conf" << EOF
 [supervisord]
 nodaemon=true
 user=openclaw
@@ -335,4 +335,4 @@ log_info "Web interface available at: http://localhost:$PORT"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
 log_info "Starting supervisord to manage services..."
 
-exec supervisord -c /app/supervisord.conf
+exec supervisord -c "$STATE_DIR/supervisord.conf"
