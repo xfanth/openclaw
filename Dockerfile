@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build OpenClaw from source
 # -----------------------------------------------------------------------------
-FROM node:22-bookworm AS builder
+FROM node:25-bookworm AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -53,7 +53,7 @@ RUN pnpm ui:install && pnpm ui:build
 # -----------------------------------------------------------------------------
 # Stage 2: Production Runtime
 # -----------------------------------------------------------------------------
-FROM node:22-bookworm
+FROM node:25-bookworm
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
