@@ -184,7 +184,7 @@ Access the browser desktop via noVNC at `http://localhost:8080/browser/`
 **Note:** The browser sidecar must provide noVNC on port `6080`. The `/browser/` route proxies to `browser:6080/vnc.html`.
 
 Example browser image that includes noVNC on port 6080:
-- `ghcr.io/xfanth/chrome-container:latest`
+- `ghcr.io/xfanth/cdp_vnc_browser:latest`
 
 When using a custom browser image, ensure it exposes noVNC on port 6080.
 
