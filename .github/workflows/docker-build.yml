@@ -480,7 +480,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install crane
-        uses: imjasonh/setup-crane@v0.4.0
+        uses: imjasonh/setup-crane@v0.5
 
       - name: Retag and push from PR image
         run: |
