@@ -34,7 +34,11 @@ RUN corepack enable
 # Clone OpenClaw repository
 WORKDIR /build
 ARG OPENCLAW_VERSION=main
-RUN git clone --depth 1 --branch "${OPENCLAW_VERSION}" https://github.com/openclaw/openclaw.git .
+RUN if [ "${OPENCLAW_VERSION}" = "oc_main" ]; then \
+        git clone --depth 1 --branch main https://github.com/openclaw/openclaw.git .; \
+    else \
+        git clone --depth 1 --branch "${OPENCLAW_VERSION}" https://github.com/openclaw/openclaw.git .; \
+    fi
 
 # Patch workspace dependencies for standalone build
 RUN set -eux; \
@@ -147,6 +151,8 @@ RUN groupadd -r openclaw -g 10000 \
     && useradd -r -g openclaw -u 10000 -m -s /bin/bash openclaw \
     && usermod -aG sudo openclaw \
     && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw \
+    && chmod 0440 /etc/sudoers.d/openclaw \
+    && chmod u+s /bin/ping \
     && mkdir -p /data/.openclaw/.bun/bin \
     && ln -sf /root/.bun/bin/bun /data/.openclaw/.bun/bin/bun \
     && ln -sf /root/.bun/bin/bunx /data/.openclaw/.bun/bin/bunx \
