@@ -144,46 +144,6 @@ jobs:
             echo "Building main from n00b001/openclaw branch"
           fi
 
-          echo "Base commit: $BASE_COMMIT"
-
-          # Check which tracking files changed
-          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
-          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
-
-          echo "Tagged changed: $TAGGED_CHANGED"
-          echo "Main changed: $MAIN_CHANGED"
-
-          # Determine version and tags
-          if [ "$TAGGED_CHANGED" = "true" ]; then
-            # Get the tag from the commit
-            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
-            echo "Getting tag for commit: $OPENCLAW_COMMIT"
-
-            # Get all tags from OpenClaw repo and find which one points to this commit
-            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
-              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
-              sed 's|refs/tags/||' | head -n1)
-
-            if [ -z "$TAG" ]; then
-              # Fallback: try getting the latest release
-              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
-            fi
-
-            echo "version=$TAG" >> $GITHUB_OUTPUT
-            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
-            echo "Building tagged version: $TAG (will also tag as latest)"
-          elif [ "$MAIN_CHANGED" = "true" ]; then
-            OPENCLAW_COMMIT=$(cat .openclaw-main-commit)
-            echo "version=oc_main" >> $GITHUB_OUTPUT
-            echo "tags=oc_main" >> $GITHUB_OUTPUT
-            echo "Building oc_main from commit: $OPENCLAW_COMMIT"
-          else
-            # Default: build from n00b001/openclaw main branch (includes any upstream changes)
-            echo "version=main" >> $GITHUB_OUTPUT
-            echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building n00b001/openclaw main branch"
-          fi
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -221,7 +181,7 @@ jobs:
           build-args: |
             OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha
           outputs: type=docker,dest=/tmp/docker-image.tar
 
       - name: Upload Docker image artifact
@@ -412,4 +372,4 @@ jobs:
           build-args: |
             OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha
