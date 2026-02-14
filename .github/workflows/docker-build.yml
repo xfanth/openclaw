@@ -47,7 +47,7 @@ jobs:
   # ===========================================================================
   pre-commit:
     name: Pre-Commit Checks
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
   # ===========================================================================
   build:
     name: Build Docker Image
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-32vcpu-ubuntu-2404
     needs: pre-commit
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
@@ -191,8 +191,8 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Extract Docker metadata
         id: meta
@@ -213,7 +213,7 @@ jobs:
             openclaw.version=${{ steps.determine-version.outputs.version }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: useblacksmith/build-push-action@v2
         with:
           context: .
           file: ./Dockerfile
@@ -224,8 +224,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/docker-image.tar
 
       - name: Upload Docker image artifact
@@ -240,7 +238,7 @@ jobs:
   # ===========================================================================
   smoke-test:
     name: Smoke Test
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-32vcpu-ubuntu-2404
     needs: build
     steps:
       - name: Checkout repository
@@ -282,7 +280,7 @@ jobs:
   # ===========================================================================
   security-scan:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: build
     steps:
       - name: Checkout repository
@@ -319,7 +317,7 @@ jobs:
   # ===========================================================================
   push:
     name: Push to GHCR
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: [pre-commit, build, smoke-test, security-scan]
     if: github.event_name == 'push'
 
@@ -428,8 +426,8 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Extract Docker metadata
         id: meta
@@ -449,7 +447,7 @@ jobs:
             openclaw.version=${{ steps.determine-version.outputs.version }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: useblacksmith/build-push-action@v2
         with:
           context: .
           file: ./Dockerfile
