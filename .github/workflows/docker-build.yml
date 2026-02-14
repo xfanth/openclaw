@@ -93,28 +93,35 @@ jobs:
 
           echo "commit_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
-          PR_NUMBER=$(gh pr list \
+          PR_INFO=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
-            --json number,mergeCommit \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | .number" | head -n1)
+            --json number,mergeCommit,headRefName \
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | \"\(.number)|\(.headRefName)\"" | head -n1)
 
-          if [ -n "$PR_NUMBER" ]; then
+          if [ -n "$PR_INFO" ]; then
+            PR_NUMBER=$(echo "$PR_INFO" | cut -d'|' -f1)
+            HEAD_BRANCH=$(echo "$PR_INFO" | cut -d'|' -f2)
+
             echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
             echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA"
+            echo "PR head branch: $HEAD_BRANCH"
 
             WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
               --event "pull_request" \
               --status success \
-              --limit 5 \
+              --limit 10 \
               --json headBranch,status,conclusion,displayTitle)
 
-            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg pr "$PR_NUMBER" '.[] | select(.headBranch | test("pull/request|pull/\($pr)"))')
+            echo "Workflow runs:"
+            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion)"'
+
+            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
 
             if [ -n "$MATCHING_RUN" ]; then
-              echo "PR #$PR_NUMBER had successful workflow run"
+              echo "PR #$PR_NUMBER had successful workflow run on branch '$HEAD_BRANCH'"
               echo "can_skip_build=true" >> $GITHUB_OUTPUT
             else
               echo "PR #$PR_NUMBER workflow status check failed, will build"
