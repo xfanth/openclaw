@@ -93,10 +93,11 @@ jobs:
 
           echo "commit_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
-          PR_NUMBER=$(gh pr list \
+          PR_INFO=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
             --json number,mergeCommit,headRefName \
+<<<<<<< HEAD
             --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
 
           if [ -n "$PR_NUMBER" ]; then
@@ -110,6 +111,7 @@ jobs:
             WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
+              --branch "$PR_HEAD_BRANCH" \
               --event "pull_request" \
               --status success \
               --limit 10 \
@@ -120,6 +122,41 @@ jobs:
 
             if [ "$MATCHING_RUN" = "true" ]; then
               echo "PR #$PR_NUM had successful workflow run on branch $PR_HEAD_BRANCH"
+              echo "can_skip_build=true" >> $GITHUB_OUTPUT
+            else
+              echo "PR #$PR_NUM workflow status check failed, will build"
+              echo "can_skip_build=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No merged PR found for commit $COMMIT_SHA"
+            echo "can_skip_build=false" >> $GITHUB_OUTPUT
+            echo "pr_number=" >> $GITHUB_OUTPUT
+          fi
+
+            WORKFLOW_RUNS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow "docker-build.yml" \
+              --branch "$HEAD_BRANCH" \
+              --event "pull_request" \
+              --status success \
+              --limit 10 \
+              --json headBranch,status,conclusion,displayTitle)
+
+<<<<<<< HEAD
+            echo "Checking for successful workflow run on branch: $PR_HEAD_BRANCH"
+            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$PR_HEAD_BRANCH" '[.[] | select(.headBranch == $branch)] | any')
+
+            if [ "$MATCHING_RUN" = "true" ]; then
+              echo "PR #$PR_NUM had successful workflow run on branch $PR_HEAD_BRANCH"
+=======
+            echo "Workflow runs:"
+            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion)"'
+
+            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
+
+            if [ -n "$MATCHING_RUN" ]; then
+              echo "PR #$PR_NUMBER had successful workflow run on branch '$HEAD_BRANCH'"
+>>>>>>> origin/main
               echo "can_skip_build=true" >> $GITHUB_OUTPUT
             else
               echo "PR #$PR_NUM workflow status check failed, will build"
