@@ -126,13 +126,13 @@ jobs:
             OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}.tar
+          outputs: type=docker,dest=/tmp/docker-image.tar
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
-          path: /tmp/${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}.tar
+          path: /tmp/docker-image.tar
           retention-days: 1
 
   # ===========================================================================
@@ -152,11 +152,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: docker-image
-          path: /tmp
 
       - name: Load Docker image
         run: |
-          docker load -i /tmp/${{ env.IMAGE_NAME }}-${{ needs.build.outputs.image_tag }}.tar
+          docker load -i docker-image.tar
+          docker tag ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }} ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
 
       - name: Run smoke test
         run: |
@@ -189,11 +189,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: docker-image
-          path: /tmp
 
       - name: Load Docker image
         run: |
-          docker load -i /tmp/${{ env.IMAGE_NAME }}-${{ needs.build.outputs.image_tag }}.tar
+          docker load -i docker-image.tar
+          docker tag ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }} ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
