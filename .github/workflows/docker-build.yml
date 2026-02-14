@@ -97,26 +97,32 @@ jobs:
             --repo "${{ github.repository }}" \
             --state merged \
             --json number,mergeCommit,headRefName \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | \"\(.number)|\(.headRefName)\"" | head -n1)
 
           if [ -n "$PR_INFO" ]; then
-            PR_NUMBER=$(echo "$PR_INFO" | jq -r '.number')
-            PR_HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
+            PR_NUMBER=$(echo "$PR_INFO" | cut -d'|' -f1)
+            HEAD_BRANCH=$(echo "$PR_INFO" | cut -d'|' -f2)
 
             echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-            echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA (branch: $PR_HEAD_BRANCH)"
+            echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA"
+            echo "PR head branch: $HEAD_BRANCH"
 
-            WORKFLOW_RUN=$(gh run list \
+            WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
-              --branch "$PR_HEAD_BRANCH" \
+              --branch "$HEAD_BRANCH" \
               --event "pull_request" \
               --status success \
-              --limit 1 \
-              --json status,conclusion)
+              --limit 10 \
+              --json headBranch,status,conclusion,displayTitle)
 
-            if [ -n "$WORKFLOW_RUN" ] && [ "$(echo "$WORKFLOW_RUN" | jq -r '.[0].status')" = "completed" ]; then
-              echo "PR #$PR_NUMBER had successful workflow run on branch $PR_HEAD_BRANCH"
+            echo "Workflow runs:"
+            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion)"'
+
+            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
+
+            if [ -n "$MATCHING_RUN" ]; then
+              echo "PR #$PR_NUMBER had successful workflow run on branch '$HEAD_BRANCH'"
               echo "can_skip_build=true" >> $GITHUB_OUTPUT
             else
               echo "PR #$PR_NUMBER workflow status check failed, will build"
@@ -261,6 +267,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            IMAGE_VERSION=${{ steps.determine-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/docker-image.tar
