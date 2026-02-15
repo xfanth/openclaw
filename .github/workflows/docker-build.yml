@@ -156,23 +156,21 @@ jobs:
             exit 0
           fi
 
-          RUN_DETAILS=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json baseSha 2>/dev/null || echo "")
-          if [ -z "$RUN_DETAILS" ]; then
-            echo "Could not fetch run details"
-            echo "can_skip_build=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          HEAD_SHA_AT_RUN=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID --jq '.head_sha')
+          echo "Head SHA at run: $HEAD_SHA_AT_RUN"
 
-          BASE_SHA_AT_RUN=$(echo "$RUN_DETAILS" | jq -r '.baseSha // empty')
-          echo "Base SHA at run: $BASE_SHA_AT_RUN"
+          PR_HEAD_SHA=$(gh api repos/${{ github.repository }}/pulls/$PR_NUM --jq '.head.sha')
+          echo "PR head SHA at merge: $PR_HEAD_SHA"
           echo "Base SHA at merge: $BASE_SHA_AT_MERGE"
 
-          if [ -n "$BASE_SHA_AT_RUN" ] && [ "$BASE_SHA_AT_RUN" = "$BASE_SHA_AT_MERGE" ]; then
-            echo "PR was up-to-date with main during testing"
+          if [ "$HEAD_SHA_AT_RUN" = "$PR_HEAD_SHA" ]; then
+            echo "PR head SHA matches workflow run - code unchanged since test"
             echo "can_skip_build=true" >> $GITHUB_OUTPUT
             echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
           else
-            echo "PR was NOT up-to-date with main during testing"
+            echo "PR was updated after testing (head SHA mismatch)"
+            echo "  Run head: $HEAD_SHA_AT_RUN"
+            echo "  PR head: $PR_HEAD_SHA"
             echo "can_skip_build=false" >> $GITHUB_OUTPUT
           fi
 
