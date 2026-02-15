@@ -245,9 +245,17 @@ jobs:
           echo "Base commit: $BASE_COMMIT"
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "version=main" >> $GITHUB_OUTPUT
-            echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from xfanth/openclaw branch"
+            # For PRs, use the latest tagged version from upstream
+            LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
+            if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
+              echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+              echo "tags=$LATEST_TAG,latest" >> $GITHUB_OUTPUT
+              echo "Building OpenClaw $LATEST_TAG (stable release) for PR"
+            else
+              echo "version=main" >> $GITHUB_OUTPUT
+              echo "tags=main,latest" >> $GITHUB_OUTPUT
+              echo "Building OpenClaw main (development) for PR"
+            fi
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
