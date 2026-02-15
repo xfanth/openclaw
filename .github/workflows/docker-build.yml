@@ -117,11 +117,19 @@ jobs:
 
           echo "commit_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
-          PR_INFO=$(gh pr list \
+          PR_INFO=$(gh pr view \
             --repo "${{ github.repository }}" \
-            --state merged \
-            --json number,mergeCommit,headRefName \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
+            --json number,baseRefOid,headRefName \
+            --jq "{number, baseSha: .baseRefOid, headBranch: .headRefName}" \
+            "${{ github.event.pull_request.number || 0 }}" 2>/dev/null || echo "")
+
+          if [ -z "$PR_INFO" ]; then
+            PR_INFO=$(gh pr list \
+              --repo "${{ github.repository }}" \
+              --state merged \
+              --json number,mergeCommit,headRefName,baseRefOid \
+              --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, baseSha: .baseRefOid, headBranch: .headRefName}" | head -1)
+          fi
 
           if [ -n "$PR_INFO" ]; then
             echo "Found merged PR info: $PR_INFO"
@@ -129,7 +137,9 @@ jobs:
 
             PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
             HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
+            BASE_SHA_AT_MERGE=$(echo "$PR_INFO" | jq -r '.baseSha')
             echo "PR head branch: $HEAD_BRANCH"
+            echo "PR base sha at merge: $BASE_SHA_AT_MERGE"
 
             WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
@@ -138,16 +148,37 @@ jobs:
               --event "pull_request" \
               --status success \
               --limit 10 \
-              --json headBranch,status,conclusion,displayTitle)
+              --json headBranch,status,conclusion,displayTitle,headSha,databaseId)
 
             echo "Workflow runs:"
-            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion)"'
+            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion) - run \(.databaseId)"'
 
-            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
+            LATEST_RUN=$(echo "$WORKFLOW_RUNS" | \
+              jq --arg branch "$HEAD_BRANCH" \
+              'sort_by(.databaseId) | reverse | .[0] | select(.headBranch == $branch)')
 
-            if [ -n "$MATCHING_RUN" ]; then
-              echo "PR #$PR_NUM had successful workflow run on branch '$HEAD_BRANCH'"
-              echo "can_skip_build=true" >> $GITHUB_OUTPUT
+            if [ -n "$LATEST_RUN" ]; then
+              RUN_ID=$(echo "$LATEST_RUN" | jq -r '.databaseId')
+              echo "Found successful workflow run: $RUN_ID"
+
+              RUN_DETAILS=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json headSha,baseSha 2>/dev/null || echo "")
+              if [ -n "$RUN_DETAILS" ]; then
+                BASE_SHA_AT_RUN=$(echo "$RUN_DETAILS" | jq -r '.baseSha // empty')
+                echo "Base sha at workflow run: $BASE_SHA_AT_RUN"
+
+                if [ -n "$BASE_SHA_AT_RUN" ] && [ "$BASE_SHA_AT_RUN" = "$BASE_SHA_AT_MERGE" ]; then
+                  echo "PR #$PR_NUM was up-to-date with main during testing (base sha matches)"
+                  echo "can_skip_build=true" >> $GITHUB_OUTPUT
+                else
+                  echo "PR #$PR_NUM was NOT up-to-date with main during testing"
+                  echo "  Base sha at run: $BASE_SHA_AT_RUN"
+                  echo "  Base sha at merge: $BASE_SHA_AT_MERGE"
+                  echo "can_skip_build=false" >> $GITHUB_OUTPUT
+                fi
+              else
+                echo "Could not fetch run details, assuming not up-to-date"
+                echo "can_skip_build=false" >> $GITHUB_OUTPUT
+              fi
             else
               echo "PR #$PR_NUM workflow status check failed, will build"
               echo "can_skip_build=false" >> $GITHUB_OUTPUT
