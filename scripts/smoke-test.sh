@@ -38,6 +38,12 @@ IMAGE_TAG="${IMAGE_TAG:-${UPSTREAM}:smoke-test}"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
+# Logging functions
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
+log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
 # Check if PicoClaw - skip OpenClaw-specific tests
 if [ "$UPSTREAM" = "picoclaw" ]; then
     log_warn "PicoClaw smoke tests are temporarily disabled due to different architecture"
@@ -47,12 +53,6 @@ if [ "$UPSTREAM" = "picoclaw" ]; then
     log_success "PicoClaw smoke tests will be enabled once architecture is documented"
     exit 0
 fi
-
-# Logging functions
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
-log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # Display configuration
 log_info "Smoke Test Configuration:"
