@@ -35,12 +35,18 @@ RUN apt-get update \
         make \
         g++ \
         pkg-config \
-        golang \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.25.7 from official distribution
+RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && rm go.tar.gz \
+    && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin; done
 
 # Install Bun for faster builds
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/root/.bun/bin:${PATH}"
 
 # Enable corepack for pnpm (install globally first as it's not bundled in node:25)
 RUN npm install -g corepack@0.34.6 --force && corepack enable
@@ -215,11 +221,11 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw, move binary to correct location
+# For PicoClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
-        rmdir /opt/picoclaw/app && \
+        rm -rf /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
         echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
     else \

@@ -15,6 +15,8 @@ This document provides guidelines for AI agents working on this repository.
 
 This workflow is NON-NEGOTIABLE for all code changes.
 
+**IMPORTANT**: You must always pull origin/main into your branch whenever making a change. You must resolve conflicts if they exist.
+
 ## Development Principles
 
 ### Simple is Better Than Complex
@@ -43,6 +45,26 @@ uv add package-name
 # Run Python scripts
 uv run python script.py
 ```
+
+See https://astral.sh for more information about `uv`.
+
+## Go Version Management for Docker Images
+
+- **Always verify before changing Go version**:
+  - Check what Go version is actually required (e.g., by checking upstream go.mod or build errors)
+  - Verify the version exists at go.dev/dl before using it
+- Test the URL returns a 200 OK before including it in Dockerfile
+- Never assume versions - use official URLs and verify
+- Search https://go.dev/dl for available versions before making changes
+
+- **Go 1.25.7 is the current stable release** (Feb 2026):
+  - Official URL: https://go.dev/dl/go1.25.7.linux-amd64.tar.gz
+  - This version is the latest stable and includes bug fixes
+
+- **Previous Debian `golang` package is outdated** (Go 1.25.7):
+  - Installing Go from Debian apt (golang package) often lags behind official releases
+- This was causing picoclaw build failures
+- **Always use official Go from go.dev for Docker builds**
 
 See https://astral.sh for more information about `uv`.
 
@@ -85,6 +107,27 @@ gh pr create --title "Description" --body "Details"
 **IMPORTANT: Do NOT merge PRs automatically. Wait for approval before merging. Never use `--admin` flag to bypass branch protection.**
 
 After approval, merge the pull request and delete the branch:
+
+## GitHub Actions Workflow Dependencies
+
+- **Critical: Job dependency race conditions**:
+  - Jobs with `needs:` dependencies can access outputs before the dependency job fully completes
+  - GitHub Actions has a delay between job completion and output availability
+  - If dependent jobs start early, they fail with errors like "State not set"
+  - **Don't rely on outputs from other jobs** for critical decisions like whether to skip builds
+  - **Pattern**: Put the check logic inside each job itself, making it self-contained
+
+- **When fixing workflow dependency issues**:
+  - Look for jobs that depend on outputs from other jobs
+  - Add a sleep/delay or check the condition inside the dependent job
+  - Better yet: Make each job independently determine its behavior without needing external outputs
+  - Document the dependency pattern in MEMORY.md so future agents understand the issue
+
+- **Correct workflow pattern for PR artifact reuse**:
+  - Build jobs should check internally: "Is this from a PR merge with available artifacts?"
+  - If yes: Skip build, download artifacts from PR run
+  - If no: Build fresh images
+  - This avoids race conditions where jobs access outputs before they're set
 
 ```bash
 gh pr merge
