@@ -37,8 +37,8 @@ RUN apt-get update \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Go 1.25.6 from official distribution
-RUN GO_VERSION="1.25.6" \
+# Install Go 1.25.7 from official distribution
+RUN GO_VERSION="1.25.7" \
     && ARCH=$(uname -m) \
     && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -o go.tar.gz \
     && rm -rf /usr/local/go \
