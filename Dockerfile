@@ -221,11 +221,11 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw, move binary to correct location
+# For PicoClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
-        rmdir /opt/picoclaw/app && \
+        rm -rf /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
         echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
     else \
