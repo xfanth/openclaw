@@ -13,6 +13,8 @@ When making ANY code changes, ALWAYS follow this workflow:
 
 This workflow is NON-NEGOTIABLE for all code changes.
 
+**IMPORTANT**: You must always pull origin/main into your branch whenever making a change. You must resolve conflicts if they exist.
+
 ## Available Tools
 
 The following tools are available:

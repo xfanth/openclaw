@@ -15,6 +15,8 @@ This document provides guidelines for AI agents working on this repository.
 
 This workflow is NON-NEGOTIABLE for all code changes.
 
+**IMPORTANT**: You must always pull origin/main into your branch whenever making a change. You must resolve conflicts if they exist.
+
 ## Development Principles
 
 ### Simple is Better Than Complex
