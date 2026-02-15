@@ -35,12 +35,20 @@ RUN apt-get update \
         make \
         g++ \
         pkg-config \
-        golang \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.25.6 from official distribution
+RUN GO_VERSION="1.25.6" \
+    && ARCH=$(uname -m) \
+    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -o go.tar.gz \
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && rm go.tar.gz \
+    && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin/; done
 
 # Install Bun for faster builds
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/root/.bun/bin:${PATH}"
 
 # Enable corepack for pnpm (install globally first as it's not bundled in node:25)
 RUN npm install -g corepack@0.34.6 --force && corepack enable
