@@ -44,24 +44,33 @@ This workflow is NON-NEGOTIABLE for all code changes.
 
 ## GitHub Actions Workflow Dependencies
 
-- **Job dependency race condition**: Jobs with `needs:` dependency can sometimes start before the dependency job's outputs are fully available
+- **Job dependency race condition**: Jobs with `needs:` dependency can sometimes start before dependency job's outputs are fully available
   - In `.github/workflows/docker-build.yml`, build jobs depend on `check-pr-status` to get `can_skip_build` output
   - However, outputs aren't immediately available to dependent jobs - there's a small delay
-  - If dependent jobs start too early, they can't access the output and fail with "State not set" or similar errors
-  - **Solution**: Don't have build jobs depend on external output. Instead, check the PR status logic inside each build job itself
+  - If dependent jobs start too early, they can't access to output and fail with "State not set" or similar errors
+  - **Solution**: Don't have build jobs depend on external output. Instead, check the PR status logic inside each job itself
+  - **Pattern**: Have self-contained logic in each job that can independently decide whether to run, rather than relying on outputs from a separate job
+  - This avoids complex cross-job dependencies that are hard to reason about
 
 - **Workflow `needs` clause behavior**:
-  - `needs: [job1, job2]` means the job waits for BOTH jobs to complete
-  - The dependency job must finish completely (including output setting) before the dependent job starts
+  - `needs: [job1, job2]` means that job waits for BOTH jobs to complete
+  - The dependency job must finish completely (including output setting) before dependent job starts
   - GitHub Actions has a delay of several seconds between job completion and output availability
   - **Pattern**: Have self-contained logic in each job that can independently decide whether to run, rather than relying on outputs from a separate job
+  - **Don't have job A depend on job B's outputs** - job A should do its own checks and set its own outputs
 
-- **Correct pattern for PR artifact reuse**:
-  - Each build job should check if it came from a PR merge and has available artifacts
-  - If yes, skip build and download artifacts from PR run
-  - If no, build fresh images
-  - This avoids the race condition where jobs try to access outputs before they're available
-## Available Tools
+- **When fixing workflow dependency issues**:
+  - Look for jobs that depend on outputs from other jobs
+  - Consider removing the external dependency and making the job self-contained
+  - Add a sleep/delay or check for condition inside the dependent job if needed
+  - Better yet: Make each job independently determine its behavior without needing external outputs
+  - Document the dependency pattern in MEMORY.md so future agents understand the issue
+
+- **Correct workflow pattern for PR artifact reuse**:
+  - Build jobs should check internally: "Is this from a PR merge with available artifacts?"
+  - If yes: Skip build, download artifacts from PR run
+  - If no: Build fresh images
+  - This avoids race conditions where jobs access outputs before they're available
 
 The following tools are available:
 - `read` - Read files from filesystem
