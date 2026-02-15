@@ -38,13 +38,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.25.7 from official distribution
-RUN GO_VERSION="1.25.7" \
-    && ARCH=$(uname -m) \
-    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -o go.tar.gz \
+RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
     && rm -rf /usr/local/go \
     && tar -C /usr/local -xzf go.tar.gz \
     && rm go.tar.gz \
-    && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin/; done
+    && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin; done
 
 # Install Bun for faster builds
 RUN curl -fsSL https://bun.sh/install | bash
