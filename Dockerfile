@@ -245,6 +245,8 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
+    '    exec node /opt/ironclaw/app/ironclaw.mjs "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
     'fi' > /usr/local/bin/${UPSTREAM} \

@@ -54,6 +54,10 @@ case "$UPSTREAM" in
         CLI_NAME="picoclaw"
         DEFAULT_STATE_DIR="/data/.picoclaw"
         ;;
+    ironclaw)
+        CLI_NAME="ironclaw"
+        DEFAULT_STATE_DIR="/data/.ironclaw"
+        ;;
     *)
         log_error "Unknown upstream: $UPSTREAM"
         exit 1
