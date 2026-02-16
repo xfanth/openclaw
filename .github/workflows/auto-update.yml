@@ -228,7 +228,8 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           echo "Checking for existing main branch PRs..."
-          EXISTING_PRS=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("auto-update/oc_main-")) | .number')
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("auto-update/oc_main-")) | .number')
           if [ -n "$EXISTING_PRS" ]; then
             for PR_NUM in $EXISTING_PRS; do
               echo "Closing superseded PR #$PR_NUM"
