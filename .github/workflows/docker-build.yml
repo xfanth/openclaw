@@ -302,8 +302,12 @@ jobs:
   smoke-test:
     name: Smoke Test (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: [build]
-    if: always() && needs.build.result == 'success'
+    needs: [build, check-pr-status]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' ||
+       (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -343,8 +347,12 @@ jobs:
   security-scan:
     name: Security Scan (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: [build]
-    if: always() && needs.build.result == 'success'
+    needs: [build, check-pr-status]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' ||
+       (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -362,10 +370,19 @@ jobs:
       - name: Load Docker image
         run: docker load -i docker-image-${{ matrix.upstream }}.tar
 
+      - name: Get image tag
+        id: get-tag
+        run: |
+          IMAGE_TAG=$(docker images --format "{{.Tag}}" | grep -E "^[a-f0-9]{7}$" | head -1)
+          if [ -z "$IMAGE_TAG" ]; then
+            IMAGE_TAG=$(docker images --format "{{.Tag}}" | head -1)
+          fi
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:${{ needs.build.outputs.image_tag }}
+          image-ref: ${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:${{ steps.get-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results-${{ matrix.upstream }}.sarif'
           severity: 'CRITICAL,HIGH'
