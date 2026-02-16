@@ -365,7 +365,7 @@ nginx -t || {
 # Fix legacy config keys
 # =============================================================================
 log_info "Running $CLI_NAME doctor to fix legacy config..."
-"/usr/local/bin/$CLI_NAME.real" doctor --fix || true
+"/usr/local/bin/$CLI_NAME" doctor --fix || true
 
 # =============================================================================
 # Create supervisord configuration
@@ -390,7 +390,7 @@ stdout_logfile=/var/log/supervisor/nginx.log
 stderr_logfile=/var/log/supervisor/nginx-error.log
 
 [program:$UPSTREAM]
-command=/usr/local/bin/$CLI_NAME.real gateway --port ${GATEWAY_PORT} --bind loopback
+command=/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback
 autostart=true
 autorestart=true
 priority=20
