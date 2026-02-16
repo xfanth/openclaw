@@ -211,6 +211,14 @@ jobs:
         run: |
           UPSTREAM="${{ matrix.upstream }}"
 
+          # Determine upstream prefix for version strings
+          case "$UPSTREAM" in
+            openclaw) PREFIX="oc" ;;
+            picoclaw) PREFIX="pc" ;;
+            ironclaw) PREFIX="ic" ;;
+            *) PREFIX="${UPSTREAM:0:2}" ;;
+          esac
+
           # Determine xfanth/openclaw repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
@@ -230,7 +238,7 @@ jobs:
                 UPSTREAM_TAG="openclaw_main"
               fi
             else
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
@@ -252,14 +260,14 @@ jobs:
                 UPSTREAM_VERSION="$TAG"
                 UPSTREAM_TAG="${UPSTREAM}_$TAG"
               else
-                UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+                UPSTREAM_VERSION="${PREFIX}_main"
                 UPSTREAM_TAG="${UPSTREAM}_main"
               fi
             elif [ "$MAIN_CHANGED" = "true" ]; then
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             else
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           fi
@@ -483,6 +491,14 @@ jobs:
         run: |
           UPSTREAM="${{ matrix.upstream }}"
 
+          # Determine upstream prefix for version strings
+          case "$UPSTREAM" in
+            openclaw) PREFIX="oc" ;;
+            picoclaw) PREFIX="pc" ;;
+            ironclaw) PREFIX="ic" ;;
+            *) PREFIX="${UPSTREAM:0:2}" ;;
+          esac
+
           # Determine xfanth/openclaw repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
@@ -502,7 +518,7 @@ jobs:
                 UPSTREAM_TAG="openclaw_main"
               fi
             else
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
@@ -524,14 +540,14 @@ jobs:
                 UPSTREAM_VERSION="$TAG"
                 UPSTREAM_TAG="${UPSTREAM}_$TAG"
               else
-                UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+                UPSTREAM_VERSION="${PREFIX}_main"
                 UPSTREAM_TAG="${UPSTREAM}_main"
               fi
             elif [ "$MAIN_CHANGED" = "true" ]; then
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             else
-              UPSTREAM_VERSION="${UPSTREAM:0:2}_main"
+              UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           fi
