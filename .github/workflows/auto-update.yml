@@ -324,7 +324,7 @@ jobs:
         run: echo "${{ needs.check-openclaw.outputs.tagged_commit }}" > .openclaw-tagged-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/openclaw-${{ needs.check-openclaw.outputs.tagged_version }}
@@ -381,7 +381,7 @@ jobs:
         run: echo "${{ needs.check-openclaw.outputs.main_commit }}" > .openclaw-main-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/openclaw-main-${{ needs.check-openclaw.outputs.main_commit }}
@@ -432,7 +432,7 @@ jobs:
         run: echo "${{ needs.check-picoclaw.outputs.tagged_commit }}" > .picoclaw-tagged-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/picoclaw-${{ needs.check-picoclaw.outputs.tagged_version }}
@@ -489,7 +489,7 @@ jobs:
         run: echo "${{ needs.check-picoclaw.outputs.main_commit }}" > .picoclaw-main-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/picoclaw-main-${{ needs.check-picoclaw.outputs.main_commit }}
@@ -540,7 +540,7 @@ jobs:
         run: echo "${{ needs.check-ironclaw.outputs.tagged_commit }}" > .ironclaw-tagged-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/ironclaw-${{ needs.check-ironclaw.outputs.tagged_version }}
@@ -597,7 +597,7 @@ jobs:
         run: echo "${{ needs.check-ironclaw.outputs.main_commit }}" > .ironclaw-main-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/ironclaw-main-${{ needs.check-ironclaw.outputs.main_commit }}
@@ -648,7 +648,7 @@ jobs:
         run: echo "${{ needs.check-zeroclaw.outputs.tagged_commit }}" > .zeroclaw-tagged-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/zeroclaw-${{ needs.check-zeroclaw.outputs.tagged_version }}
@@ -705,7 +705,7 @@ jobs:
         run: echo "${{ needs.check-zeroclaw.outputs.main_commit }}" > .zeroclaw-main-commit
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/zeroclaw-main-${{ needs.check-zeroclaw.outputs.main_commit }}
