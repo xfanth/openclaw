@@ -328,13 +328,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' \
     'else' \
     '    echo "Error: No upstream application found" >&2' \
     '    exit 1' \
-    'fi' > /usr/local/bin/upstream.real \
-    && chmod +x /usr/local/bin/upstream.real
-
-# Copy and install the user switching wrapper
-COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/openclaw-wrapper.sh /usr/local/bin/${UPSTREAM}
-RUN chmod +x /usr/local/bin/${UPSTREAM} \
-    && ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
+    'fi' > /usr/local/bin/upstream \
+    && chmod +x /usr/local/bin/upstream
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
