@@ -1,16 +1,18 @@
 # =============================================================================
-# OpenClaw/PicoClaw Docker Image - Debian Bookworm (LTS) Based
+# OpenClaw/PicoClaw/IronClaw/ZeroClaw Docker Image - Debian Bookworm (LTS) Based
 # =============================================================================
-# This Dockerfile builds either OpenClaw or PicoClaw from source and creates a
-# production-ready image with all necessary components for 24/7 operation.
+# This Dockerfile builds OpenClaw, PicoClaw, IronClaw, or ZeroClaw from source
+# and creates a production-ready image with all necessary components for 24/7 operation.
 #
 # Build Arguments:
-#   UPSTREAM        - Which upstream to build: "openclaw" or "picoclaw" (default: openclaw)
+#   UPSTREAM        - Which upstream to build: "openclaw", "picoclaw", "ironclaw", or "zeroclaw" (default: openclaw)
 #   UPSTREAM_VERSION - Version/branch to build (default: main)
 #
 # Examples:
 #   docker build -t openclaw:latest .
 #   docker build --build-arg UPSTREAM=picoclaw -t picoclaw:latest .
+#   docker build --build-arg UPSTREAM=ironclaw -t ironclaw:latest .
+#   docker build --build-arg UPSTREAM=zeroclaw -t zeroclaw:latest .
 #   docker build --build-arg UPSTREAM=openclaw --build-arg UPSTREAM_VERSION=v2026.2.1 -t openclaw:v2026.2.1 .
 # =============================================================================
 
@@ -25,17 +27,21 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG UPSTREAM=openclaw
 ARG UPSTREAM_VERSION=main
 
-# Install build dependencies
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git \
-        ca-certificates \
-        curl \
-        python3 \
-        make \
-        g++ \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies with retry logic for transient network issues
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --fix-missing \
+            git \
+            ca-certificates \
+            curl \
+            python3 \
+            make \
+            g++ \
+            pkg-config && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Install Go 1.25.7 from official distribution
 RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
@@ -44,9 +50,13 @@ RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
     && rm go.tar.gz \
     && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin; done
 
+# Install Rust for IronClaw/ZeroClaw builds
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Install Bun for faster builds
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/usr/local/go/bin:/root/.bun/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/root/.bun/bin:/root/.cargo/bin:${PATH}"
 
 # Enable corepack for pnpm (install globally first as it's not bundled in node:25)
 RUN npm install -g corepack@0.34.6 --force && corepack enable
@@ -84,17 +94,10 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         done; \
     fi
 
-# Install Rust for ZeroClaw build
-RUN if [ "${UPSTREAM}" = "zeroclaw" ]; then \
-        echo "Installing Rust toolchain..."; \
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable; \
-    fi
-ENV PATH="/root/.cargo/bin:${PATH}"
-
 # Patch upstream TypeScript errors (OpenClaw/IronClaw only)
 # These patches fix type errors in upstream code that breaks the build
 # Using @ts-ignore instead of @ts-expect-error so patches work regardless of upstream state
-RUN if [ "${UPSTREAM}" != "picoclaw" ]; then \
+RUN if [ "${UPSTREAM}" != "picoclaw" ] && [ "${UPSTREAM}" != "zeroclaw" ]; then \
         set -eux; \
         if [ -f src/channels/plugins/actions/telegram.ts ]; then \
             sed -i '237a\        // @ts-ignore poll action not in type union' src/channels/plugins/actions/telegram.ts; \
@@ -116,6 +119,12 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         go generate ./... && \
         go build -v -ldflags="-X main.version=${UPSTREAM_VERSION}" -o /build/picoclaw ./cmd/picoclaw && \
         echo "PicoClaw binary built successfully"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        echo "Building IronClaw (Rust binary)..."; \
+        cd /build && \
+        cargo build --release && \
+        cp target/release/ironclaw /build/ironclaw && \
+        echo "IronClaw binary built successfully"; \
     elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
         echo "Building ZeroClaw (Rust binary)..."; \
         cd /build && \
@@ -166,49 +175,44 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
 
 # Install runtime dependencies including nginx for reverse proxy
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        # Core utilities
-        ca-certificates \
-        curl \
-        wget \
-        git \
-        # Security
-        openssl \
-        # Process management
-        procps \
-        supervisor \
-        # Text editors and tools
-        neovim \
-        vim-tiny \
-        nano \
-        # Build tools (for native modules)
-        build-essential \
-        python3 \
-        make \
-        g++ \
-        pkg-config \
-        # File utilities
-        file \
-        # Network tools
-        net-tools \
-        iputils-ping \
-        dnsutils \
-        # System utilities
-        sudo \
-        htop \
-        # Nginx for reverse proxy
-        nginx \
-        apache2-utils \
-        # Additional useful packages
-        jq \
-        unzip \
-        zip \
-        rsync \
-        cron \
-        logrotate \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# Uses retry logic to handle transient Debian mirror sync issues
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing \
+            ca-certificates \
+            curl \
+            wget \
+            git \
+            openssl \
+            procps \
+            supervisor \
+            neovim \
+            vim-tiny \
+            nano \
+            build-essential \
+            python3 \
+            make \
+            g++ \
+            pkg-config \
+            file \
+            net-tools \
+            iputils-ping \
+            dnsutils \
+            sudo \
+            htop \
+            nginx \
+            apache2-utils \
+            jq \
+            unzip \
+            zip \
+            rsync \
+            cron \
+            logrotate && \
+        rm -rf /var/lib/apt/lists/* && \
+        apt-get clean && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Install Homebrew (Linuxbrew) for additional package management
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
@@ -221,15 +225,19 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # Install npm via Node.js and enable corepack for pnpm and yarn
 RUN npm install -g npm@11.10.0 && npm install -g corepack@0.34.6 --force && corepack enable
 
-# Install GitHub CLI
+# Install GitHub CLI with retry logic
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+    && for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing gh && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
-# Install 1Password CLI
+# Install 1Password CLI with retry logic
 RUN ARCH=$(dpkg --print-architecture) \
     && curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
     && echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/${ARCH} stable main" | tee /etc/apt/sources.list.d/1password.list \
@@ -237,9 +245,13 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | tee /etc/debsig/policies/AC2D62742012EA22/1password.pol \
     && mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
     && curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends 1password-cli \
-    && rm -rf /var/lib/apt/lists/*
+    && for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing 1password-cli && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Create non-root user for running the application
 # Use high UID/GID to avoid conflicts with existing users in base image
@@ -258,13 +270,19 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw/ZeroClaw, move binary to correct location and clean up
+# For PicoClaw/IronClaw/ZeroClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
         rm -rf /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
         echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        echo "Moving IronClaw binary..."; \
+        mv /opt/ironclaw/app/ironclaw /opt/ironclaw/ironclaw && \
+        rm -rf /opt/ironclaw/app && \
+        chmod +x /opt/ironclaw/ironclaw && \
+        echo "IronClaw binary moved to /opt/ironclaw/ironclaw"; \
     elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
         echo "Moving ZeroClaw binary..."; \
         mv /opt/zeroclaw/app/zeroclaw /opt/zeroclaw/zeroclaw && \
@@ -291,14 +309,32 @@ RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTR
     'elif [ "$UPSTREAM" = "zeroclaw" ]; then' \
     '    exec /opt/zeroclaw/zeroclaw "$@"' \
     'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
-    '    exec node /opt/ironclaw/app/ironclaw.mjs "$@"' \
+    '    exec /opt/ironclaw/ironclaw "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
     'fi' > /usr/local/bin/${UPSTREAM} \
     && chmod +x /usr/local/bin/${UPSTREAM}
 
-# Create universal CLI symlink
-RUN ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
+# Create universal CLI wrapper that works regardless of upstream
+RUN printf '%s\n' '#!/usr/bin/env bash' \
+    'if [ -f /opt/openclaw/app/openclaw.mjs ]; then' \
+    '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
+    'elif [ -f /opt/picoclaw/picoclaw ]; then' \
+    '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ -f /opt/ironclaw/ironclaw ]; then' \
+    '    exec /opt/ironclaw/ironclaw "$@"' \
+    'elif [ -f /opt/zeroclaw/zeroclaw ]; then' \
+    '    exec /opt/zeroclaw/zeroclaw "$@"' \
+    'else' \
+    '    echo "Error: No upstream application found" >&2' \
+    '    exit 1' \
+    'fi' > /usr/local/bin/upstream.real \
+    && chmod +x /usr/local/bin/upstream.real
+
+# Copy and install the user switching wrapper
+COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/openclaw-wrapper.sh /usr/local/bin/${UPSTREAM}
+RUN chmod +x /usr/local/bin/${UPSTREAM} \
+    && ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
