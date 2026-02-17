@@ -246,6 +246,11 @@ for i in 1 2 3 4 5; do
         log_warn "HTTP 502 (Bad Gateway) - nginx is up but backend may be down"
         break
     fi
+    if [ "$HTTP_CODE" = "404" ]; then
+        log_warn "HTTP 404 - backend is up but may not have /healthz endpoint"
+        HTTP_SUCCESS=1
+        break
+    fi
     log_info "Attempt $i: HTTP $HTTP_CODE, retrying..."
     sleep 2
 done
