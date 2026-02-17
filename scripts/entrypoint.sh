@@ -81,6 +81,16 @@ case "$UPSTREAM" in
         ;;
 esac
 
+# Determine if this is a Node.js upstream (has full CLI) or compiled binary
+IS_NODEJS_UPSTREAM=false
+case "$UPSTREAM" in
+    openclaw)
+        IS_NODEJS_UPSTREAM=true
+        ;;
+    picoclaw|ironclaw|zeroclaw)
+        ;;
+esac
+
 # =============================================================================
 # Fix permissions if running as root (for bind mounts)
 # =============================================================================
@@ -417,6 +427,14 @@ log_info "Creating supervisord configuration..."
 
 mkdir -p /var/log/supervisor
 
+# Determine gateway command based on upstream type
+# OpenClaw supports --bind, compiled binaries (picoclaw/zeroclaw/ironclaw) do not
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback"
+else
+    GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+fi
+
 cat > "$STATE_DIR/supervisord.conf" << EOF
 [supervisord]
 nodaemon=true
@@ -440,7 +458,7 @@ stdout_logfile=/var/log/supervisor/nginx.log
 stderr_logfile=/var/log/supervisor/nginx-error.log
 
 [program:$UPSTREAM]
-command=/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback
+command=$GATEWAY_CMD
 autostart=true
 autorestart=true
 priority=20
