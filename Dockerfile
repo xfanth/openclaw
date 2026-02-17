@@ -59,11 +59,17 @@ RUN set -eux && \
     if [ "${UPSTREAM}" = "picoclaw" ]; then \
         GITHUB_OWNER="sipeed"; \
         GITHUB_REPO="picoclaw"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        GITHUB_OWNER="nearai"; \
+        GITHUB_REPO="ironclaw"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        GITHUB_OWNER="zeroclaw-labs"; \
+        GITHUB_REPO="zeroclaw"; \
     else \
         GITHUB_OWNER="openclaw"; \
         GITHUB_REPO="openclaw"; \
     fi && \
-    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ]; then \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ] || [ "${UPSTREAM_VERSION}" = "zc_main" ]; then \
         git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
         git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
@@ -77,6 +83,13 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
             sed -i -E 's/"openclaw"[[:space:]]*:[[:space:]]*"workspace:[^"]+"/"openclaw": "*"/g' "$f"; \
         done; \
     fi
+
+# Install Rust for ZeroClaw build
+RUN if [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        echo "Installing Rust toolchain..."; \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable; \
+    fi
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Patch upstream TypeScript errors (OpenClaw/IronClaw only)
 # These patches fix type errors in upstream code that breaks the build
@@ -103,6 +116,12 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         go generate ./... && \
         go build -v -ldflags="-X main.version=${UPSTREAM_VERSION}" -o /build/picoclaw ./cmd/picoclaw && \
         echo "PicoClaw binary built successfully"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        echo "Building ZeroClaw (Rust binary)..."; \
+        cd /build && \
+        cargo build --release && \
+        mv target/release/zeroclaw /build/zeroclaw && \
+        echo "ZeroClaw binary built successfully"; \
     else \
         echo "Building OpenClaw (Node.js)..."; \
         pnpm install --no-frozen-lockfile && \
@@ -117,7 +136,7 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         pnpm ui:build && \
         echo "OpenClaw UI build complete"; \
     else \
-        echo "Skipping UI build for PicoClaw (no UI components)"; \
+        echo "Skipping UI build for ${UPSTREAM} (no UI components)"; \
     fi
 
 # Store upstream info for later stages
@@ -239,13 +258,19 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw, move binary to correct location and clean up
+# For PicoClaw/ZeroClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
         rm -rf /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
         echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        echo "Moving ZeroClaw binary..."; \
+        mv /opt/zeroclaw/app/zeroclaw /opt/zeroclaw/zeroclaw && \
+        rm -rf /opt/zeroclaw/app && \
+        chmod +x /opt/zeroclaw/zeroclaw && \
+        echo "ZeroClaw binary moved to /opt/zeroclaw/zeroclaw"; \
     else \
         echo "OpenClaw application is in /opt/openclaw/app/"; \
     fi
@@ -263,6 +288,8 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ "$UPSTREAM" = "zeroclaw" ]; then' \
+    '    exec /opt/zeroclaw/zeroclaw "$@"' \
     'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
     '    exec node /opt/ironclaw/app/ironclaw.mjs "$@"' \
     'else' \
