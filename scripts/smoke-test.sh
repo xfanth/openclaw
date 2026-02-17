@@ -325,6 +325,7 @@ if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_error "Identity directory is not writable by ${UPSTREAM} user"
+    log_error "This is a critical permission error - check bind mount ownership"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
 fi
@@ -336,8 +337,17 @@ if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_error "${UPSTREAM} user cannot write files in identity directory"
+    log_error "Entrypoint permission fix may not be working correctly"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
+fi
+
+# If identity permissions failed, show detailed diagnostics
+if [ $IDENTITY_PERMISSIONS -gt 0 ]; then
+    log_info "Identity directory diagnostics:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/" 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" stat "/data/.${UPSTREAM}/identity" 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" id "$UPSTREAM" 2>/dev/null || true
 fi
 
 # =============================================================================

@@ -78,6 +78,7 @@ esac
 if [ "$(id -u)" = "0" ]; then
     log_info "Running as root, fixing permissions for $UPSTREAM user..."
 
+    # Check that user exists before proceeding
     if ! id "$UPSTREAM" >/dev/null 2>&1; then
         log_error "User '$UPSTREAM' does not exist!"
         log_error "This usually means the image was built for a different upstream."
@@ -86,11 +87,25 @@ if [ "$(id -u)" = "0" ]; then
         exit 1
     fi
 
-    chown -R "$UPSTREAM:$UPSTREAM" /data 2>/dev/null || true
+    # Create required directories first (before chown)
+    STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.${UPSTREAM}}"
+    mkdir -p "$STATE_DIR/identity" 2>/dev/null || true
+    mkdir -p "$STATE_DIR/credentials" 2>/dev/null || true
+    mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" 2>/dev/null || true
+    mkdir -p "/var/log/$UPSTREAM" 2>/dev/null || true
+
+    # Fix ownership - warn if chown fails (common with restrictive bind mounts)
+    if ! chown -R "$UPSTREAM:$UPSTREAM" /data 2>/dev/null; then
+        log_warn "Could not change ownership of /data - bind mount may have restrictive permissions"
+        log_warn "If you see permission errors, fix ownership on the host: chown -R 10000:10000 <bind-mount-path>"
+    fi
     chown -R "$UPSTREAM:$UPSTREAM" "/var/log/$UPSTREAM" 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/log/supervisor 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/lib/nginx 2>/dev/null || true
-    sync
+
+    # Ensure identity directory has correct permissions (must be writable)
+    chmod 700 "$STATE_DIR/identity" 2>/dev/null || true
+    sync  # Ensure all chown operations complete before proceeding
 
     log_info "Switching to $UPSTREAM user..."
     exec su -s /bin/bash --whitelist-environment=UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
