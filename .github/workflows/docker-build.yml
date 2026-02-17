@@ -217,7 +217,7 @@ jobs:
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 
-          # Determine xfanth/claw-builder repo tag
+          # Determine xfanth/polyclaw repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
           else
@@ -496,7 +496,7 @@ jobs:
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 
-          # Determine xfanth/claw-builder repo tag
+          # Determine xfanth/polyclaw repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
           else
