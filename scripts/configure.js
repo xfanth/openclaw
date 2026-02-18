@@ -239,6 +239,7 @@ function buildPicoClawConfig() {
         },
         providers: {},
         gateway: {
+            // Use fixed internal port (nginx proxies from external GATEWAY_PORT to internal 18789)
             host: '127.0.0.1',
             port: 18789
         },
@@ -336,8 +337,9 @@ function buildZeroClawConfig() {
         }
     }
 
-    const gatewayPort = parseInt(process.env.OPENCLAW_GATEWAY_PORT || '18789', 10);
     const gatewayHost = process.env.ZEROCLAW_GATEWAY_HOST || '127.0.0.1';
+    // Use fixed internal port (nginx proxies from external GATEWAY_PORT to internal 18789)
+    const gatewayPort = 18789;
 
     const config = {
         workspace_dir: `${STATE_DIR}/workspace`,

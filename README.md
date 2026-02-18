@@ -418,9 +418,8 @@ services:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENCLAW_GATEWAY_TOKEN` | Bearer token for API | Auto-generated |
-| `OPENCLAW_GATEWAY_PORT` | Internal gateway port | `18789` |
+| `OPENCLAW_GATEWAY_PORT` | Gateway port (nginx + upstream) | `8080` |
 | `OPENCLAW_GATEWAY_BIND` | Bind mode (loopback/lan) | `loopback` |
-| `PORT` | External port (nginx) | `8080` |
 
 ### Models
 

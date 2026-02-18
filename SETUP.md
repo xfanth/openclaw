@@ -203,7 +203,7 @@ SLACK_GROUP_POLICY=open
 ### Port
 
 ```env
-PORT=8080                       # External web port
+OPENCLAW_GATEWAY_PORT=8080            # Gateway port (nginx + upstream)
 ```
 
 ## GitHub Actions CI/CD
