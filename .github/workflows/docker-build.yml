@@ -45,6 +45,119 @@ permissions:
   actions: read
 
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      upstreams: ${{ steps.detect.outputs.upstreams }}
+      any_changes: ${{ steps.detect.outputs.any_changes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect which upstreams need building
+        id: detect
+        run: |
+          # Get changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          # Handle initial push (before is all zeros)
+          if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES=$(git ls-tree -r --name-only HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA 2>/dev/null || git ls-tree -r --name-only HEAD)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Paths that affect ALL upstreams (common infrastructure)
+          COMMON_PATHS="scripts/ .github/workflows/ docker-compose nginx.conf lib/ config/ .dockerignore"
+
+          # Check if base Dockerfile changed (builds all)
+          BUILD_ALL="false"
+          if echo "$CHANGED_FILES" | grep -q "^Dockerfile$"; then
+            BUILD_ALL="true"
+            echo "Base Dockerfile changed - building all upstreams"
+          fi
+
+          # Check if any common paths changed
+          if [ "$BUILD_ALL" = "false" ]; then
+            for pattern in $COMMON_PATHS; do
+              if echo "$CHANGED_FILES" | grep -q "^$pattern"; then
+                BUILD_ALL="true"
+                echo "Common path '$pattern' changed - building all upstreams"
+                break
+              fi
+            done
+          fi
+
+          # Determine which upstreams to build
+          if [ "$BUILD_ALL" = "true" ]; then
+            echo "upstreams=[\"openclaw\",\"picoclaw\",\"ironclaw\",\"zeroclaw\"]" >> $GITHUB_OUTPUT
+            echo "any_changes=true" >> $GITHUB_OUTPUT
+            echo "Building all upstreams due to common path changes"
+            exit 0
+          fi
+
+          # Check upstream-specific files (Dockerfile-{upstream} or version tracking files)
+          BUILD_OPENCLAW="false"
+          BUILD_PICOCLAW="false"
+          BUILD_IRONCLAW="false"
+          BUILD_ZEROCLAW="false"
+
+          for file in $CHANGED_FILES; do
+            case "$file" in
+              Dockerfile-openclaw|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
+              Dockerfile-picoclaw|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
+              Dockerfile-ironclaw|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
+              Dockerfile-zeroclaw|.zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
+            esac
+          done
+
+          # Build JSON array of upstreams
+          FIRST="true"
+          UPSTREAMS_JSON="["
+          if [ "$BUILD_OPENCLAW" = "true" ]; then
+            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"openclaw\""
+            FIRST="false"
+          fi
+          if [ "$BUILD_PICOCLAW" = "true" ]; then
+            [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
+            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"picoclaw\""
+            FIRST="false"
+          fi
+          if [ "$BUILD_IRONCLAW" = "true" ]; then
+            [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
+            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"ironclaw\""
+            FIRST="false"
+          fi
+          if [ "$BUILD_ZEROCLAW" = "true" ]; then
+            [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
+            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"zeroclaw\""
+            FIRST="false"
+          fi
+          UPSTREAMS_JSON="${UPSTREAMS_JSON}]"
+
+          echo "Upstreams to build: $UPSTREAMS_JSON"
+          echo "upstreams=$UPSTREAMS_JSON" >> $GITHUB_OUTPUT
+
+          # Set any_changes flag
+          if [ "$UPSTREAMS_JSON" = "[]" ]; then
+            echo "any_changes=false" >> $GITHUB_OUTPUT
+            echo "No relevant changes detected - skipping builds"
+          else
+            echo "any_changes=true" >> $GITHUB_OUTPUT
+          fi
+
   pre-commit:
     name: Pre-Commit Checks
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -160,16 +273,17 @@ jobs:
   build:
     name: Build (${{ matrix.upstream }})
     runs-on: blacksmith-32vcpu-ubuntu-2404
-    needs: [pre-commit, python-tests, check-pr-status]
+    needs: [detect-changes, pre-commit, python-tests, check-pr-status]
     if: |
       always() &&
       needs.pre-commit.result == 'success' &&
       needs.python-tests.result == 'success' &&
+      needs.detect-changes.outputs.any_changes == 'true' &&
       (github.event_name == 'pull_request' ||
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
+        upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
         include:
           - upstream: openclaw
             github_owner: openclaw
@@ -309,14 +423,13 @@ jobs:
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile-${{ matrix.upstream }}
           platforms: linux/amd64
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            UPSTREAM=${{ matrix.upstream }}
             UPSTREAM_VERSION=${{ steps.determine-version.outputs.upstream_version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
@@ -333,7 +446,7 @@ jobs:
   smoke-test:
     name: Smoke Test (${{ matrix.upstream }})
     runs-on: blacksmith-32vcpu-ubuntu-2404
-    needs: [build, check-pr-status]
+    needs: [detect-changes, build, check-pr-status]
     if: |
       always() &&
       needs.build.result == 'success' &&
@@ -341,7 +454,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
+        upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -376,7 +489,7 @@ jobs:
   security-scan:
     name: Security Scan (${{ matrix.upstream }})
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    needs: [build, check-pr-status]
+    needs: [detect-changes, build, check-pr-status]
     if: |
       always() &&
       needs.build.result == 'success' &&
@@ -384,7 +497,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
+        upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -426,16 +539,17 @@ jobs:
   download-pr-artifacts:
     name: Download PR Artifacts (${{ matrix.upstream }})
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    needs: [pre-commit, python-tests, check-pr-status]
+    needs: [detect-changes, pre-commit, python-tests, check-pr-status]
     if: |
       always() &&
       needs.pre-commit.result == 'success' &&
       needs.python-tests.result == 'success' &&
       needs.check-pr-status.result == 'success' &&
-      needs.check-pr-status.outputs.can_skip_build == 'true'
+      needs.check-pr-status.outputs.can_skip_build == 'true' &&
+      needs.detect-changes.outputs.any_changes == 'true'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
+        upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
     steps:
       - name: Download artifact from PR run
         uses: actions/download-artifact@v4
@@ -455,19 +569,20 @@ jobs:
   push-to-ghcr:
     name: Push to GHCR (${{ matrix.upstream }})
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    needs: [pre-commit, python-tests, build, smoke-test, security-scan, check-pr-status, download-pr-artifacts]
+    needs: [detect-changes, pre-commit, python-tests, build, smoke-test, security-scan, check-pr-status, download-pr-artifacts]
     if: |
       always() &&
       github.event_name == 'push' &&
       needs.pre-commit.result == 'success' &&
       needs.python-tests.result == 'success' &&
+      needs.detect-changes.outputs.any_changes == 'true' &&
       (
         (needs.build.result == 'success' && needs.smoke-test.result == 'success' && needs.security-scan.result == 'success') ||
         (needs.download-pr-artifacts.result == 'success')
       )
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
+        upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

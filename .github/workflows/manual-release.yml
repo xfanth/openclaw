@@ -116,13 +116,12 @@ jobs:
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile-${{ matrix.upstream }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            UPSTREAM=${{ matrix.upstream }}
             UPSTREAM_VERSION=${{ needs.create-release.outputs.new_version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
