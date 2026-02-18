@@ -343,7 +343,7 @@ function buildZeroClawConfig() {
         },
         heartbeat: {
             enabled: true,
-            interval: 30
+            interval_minutes: 30
         },
         channels: {}
     };
