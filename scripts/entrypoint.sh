@@ -81,6 +81,16 @@ case "$UPSTREAM" in
         ;;
 esac
 
+# Determine if this is a Node.js upstream (has full CLI) or compiled binary
+IS_NODEJS_UPSTREAM=false
+case "$UPSTREAM" in
+    openclaw)
+        IS_NODEJS_UPSTREAM=true
+        ;;
+    picoclaw|ironclaw|zeroclaw)
+        ;;
+esac
+
 # =============================================================================
 # Fix permissions if running as root (for bind mounts)
 # =============================================================================
@@ -407,8 +417,13 @@ nginx -t || {
 # =============================================================================
 # Fix legacy config keys
 # =============================================================================
-log_info "Running $CLI_NAME doctor to fix legacy config..."
-"/usr/local/bin/$CLI_NAME" doctor --fix || true
+log_info "Running $CLI_NAME doctor..."
+# Only openclaw supports --fix flag; other upstreams just run basic doctor
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    "/usr/local/bin/$CLI_NAME" doctor --fix || true
+else
+    "/usr/local/bin/$CLI_NAME" doctor || true
+fi
 
 # =============================================================================
 # Create supervisord configuration
@@ -417,12 +432,46 @@ log_info "Creating supervisord configuration..."
 
 mkdir -p /var/log/supervisor
 
+# Determine gateway command based on upstream type
+# Each upstream has different CLI for starting the gateway:
+# - OpenClaw: openclaw gateway --port X --bind Y
+# - PicoClaw: picoclaw gateway --port X
+# - ZeroClaw: zeroclaw gateway --port X
+# - IronClaw: ironclaw (no gateway subcommand - just runs agent with all channels)
+case "$UPSTREAM" in
+    openclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback"
+        ;;
+    picoclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        ;;
+    zeroclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        ;;
+    ironclaw)
+        # IronClaw has no 'gateway' subcommand - just run the binary
+        # It starts REPL, HTTP webhooks, and web gateway together
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME"
+        ;;
+    *)
+        log_error "Unknown upstream: $UPSTREAM"
+        exit 1
+        ;;
+esac
+
 cat > "$STATE_DIR/supervisord.conf" << EOF
 [supervisord]
 nodaemon=true
 user=$UPSTREAM
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/tmp/supervisord.pid
+
+[unix_http_server]
+file=/tmp/supervisor.sock
+chmod=0700
+
+[supervisorctl]
+serverurl=unix:///tmp/supervisor.sock
 
 [program:nginx]
 command=nginx -g "daemon off;"
@@ -433,7 +482,7 @@ stdout_logfile=/var/log/supervisor/nginx.log
 stderr_logfile=/var/log/supervisor/nginx-error.log
 
 [program:$UPSTREAM]
-command=/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback
+command=$GATEWAY_CMD
 autostart=true
 autorestart=true
 priority=20
