@@ -328,7 +328,21 @@ else
         docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/" 2>/dev/null || true
 
         log_info "Config file contents:"
-        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/data/.${UPSTREAM}/.${UPSTREAM}/config.json" 2>/dev/null | head -50 || true
+        # Use correct config file extension based on upstream type
+        case "$UPSTREAM" in
+            zeroclaw)
+                CONFIG_EXT="toml"
+                ;;
+            ironclaw)
+                CONFIG_EXT="none"  # IronClaw doesn't use config file
+                ;;
+            *)
+                CONFIG_EXT="json"
+                ;;
+        esac
+        if [ "$CONFIG_EXT" != "none" ]; then
+            docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/data/.${UPSTREAM}/.${UPSTREAM}/config.${CONFIG_EXT}" 2>/dev/null | head -50 || true
+        fi
 
         TESTS_FAILED=$((TESTS_FAILED + 1))
         exit 1

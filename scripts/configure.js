@@ -3,10 +3,10 @@
 // OpenClaw Configuration Generator
 // =============================================================================
 // Generates config from environment variables for all upstream types
-// - OpenClaw: ~/.openclaw/openclaw.json (Node.js format)
-// - PicoClaw: ~/.picoclaw/config.json (Go format)
-// - ZeroClaw: ~/.zeroclaw/config.json (Rust format)
-// - IronClaw: ~/.ironclaw/config.json (Rust format)
+// - OpenClaw: ~/.openclaw/openclaw.json (Node.js JSON format)
+// - PicoClaw: ~/.picoclaw/config.json (Go JSON format)
+// - ZeroClaw: ~/.zeroclaw/config.toml (Rust TOML format)
+// - IronClaw: No config file (uses PostgreSQL, configured via `ironclaw onboard`)
 // =============================================================================
 
 const fs = require('fs');
@@ -18,19 +18,32 @@ const WORKSPACE_DIR = (process.env.OPENCLAW_WORKSPACE_DIR || '/data/workspace').
 
 // Config file path differs by upstream type:
 // - OpenClaw uses OPENCLAW_CONFIG_PATH or STATE_DIR/openclaw.json
-// - PicoClaw/ZeroClaw/IronClaw use ~/.picoclaw/config.json pattern
-//   But since we set HOME to STATE_DIR, they look for STATE_DIR/.picoclaw/config.json
-//   So we need to create a nested directory structure or use config.json directly
+// - PicoClaw uses ~/.picoclaw/config.json (JSON format)
+// - ZeroClaw uses ~/.zeroclaw/config.toml (TOML format!)
+// - IronClaw uses ~/.ironclaw/settings.toml (TOML + PostgreSQL, no JSON config)
 let CONFIG_FILE;
+let CONFIG_FORMAT = 'json';
+
 if (UPSTREAM === 'openclaw') {
     CONFIG_FILE = process.env.OPENCLAW_CONFIG_PATH || path.join(STATE_DIR, `${UPSTREAM}.json`);
+    CONFIG_FORMAT = 'json';
+} else if (UPSTREAM === 'ironclaw') {
+    // IronClaw doesn't use JSON config - it requires TOML and PostgreSQL
+    // Config is handled via `ironclaw onboard`
+    CONFIG_FILE = null;
+    CONFIG_FORMAT = 'none';
+} else if (UPSTREAM === 'zeroclaw') {
+    // ZeroClaw expects TOML config at $HOME/.zeroclaw/config.toml
+    const nestedDir = path.join(STATE_DIR, `.${UPSTREAM}`);
+    fs.mkdirSync(nestedDir, { recursive: true });
+    CONFIG_FILE = path.join(nestedDir, 'config.toml');
+    CONFIG_FORMAT = 'toml';
 } else {
-    // For Go/Rust binaries, they expect $HOME/.${UPSTREAM}/config.json
-    // Since HOME is set to STATE_DIR in entrypoint, they look for STATE_DIR/.${UPSTREAM}/config.json
-    // We create this nested structure
+    // PicoClaw and other Go binaries use JSON
     const nestedDir = path.join(STATE_DIR, `.${UPSTREAM}`);
     fs.mkdirSync(nestedDir, { recursive: true });
     CONFIG_FILE = path.join(nestedDir, 'config.json');
+    CONFIG_FORMAT = 'json';
 }
 
 console.log('[configure] upstream:', UPSTREAM);
@@ -293,8 +306,189 @@ function buildPicoClawConfig() {
 }
 
 function buildZeroClawConfig() {
-    // ZeroClaw config format (Rust) - similar to PicoClaw
-    return buildPicoClawConfig();
+    // ZeroClaw config format (Rust) - uses TOML
+    // See: https://github.com/zeroclaw-labs/zeroclaw
+    const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'glm-4.7';
+    const model = primaryModel.includes('/') ? primaryModel.split('/')[1] : primaryModel;
+
+    const config = {
+        agents: {
+            defaults: {
+                workspace: `${STATE_DIR}/workspace`,
+                restrict_to_workspace: true,
+                model: model,
+                max_tokens: 8192,
+                temperature: 0.7,
+                max_tool_iterations: 20
+            }
+        },
+        providers: {},
+        gateway: {
+            host: '127.0.0.1',
+            port: 18789
+        },
+        tools: {
+            web: {
+                duckduckgo: {
+                    enabled: true,
+                    max_results: 5
+                }
+            },
+            cron: {
+                exec_timeout_minutes: 5
+            }
+        },
+        heartbeat: {
+            enabled: true,
+            interval: 30
+        },
+        channels: {}
+    };
+
+    // Map API keys to ZeroClaw provider format
+    const providerKeys = {
+        openrouter: process.env.OPENROUTER_API_KEY,
+        anthropic: process.env.ANTHROPIC_API_KEY,
+        openai: process.env.OPENAI_API_KEY,
+        gemini: process.env.GEMINI_API_KEY,
+        zhipu: process.env.ZAI_API_KEY,
+        groq: process.env.GROQ_API_KEY,
+    };
+
+    for (const [name, apiKey] of Object.entries(providerKeys)) {
+        if (apiKey) {
+            config.providers[name] = {
+                api_key: apiKey
+            };
+            if (PROVIDER_URLS[name]) {
+                config.providers[name].api_base = PROVIDER_URLS[name];
+            }
+        }
+    }
+
+    if (process.env.TELEGRAM_BOT_TOKEN) {
+        config.channels.telegram = {
+            enabled: true,
+            token: process.env.TELEGRAM_BOT_TOKEN,
+            allow_from: []
+        };
+    }
+
+    if (process.env.DISCORD_BOT_TOKEN) {
+        config.channels.discord = {
+            enabled: true,
+            token: process.env.DISCORD_BOT_TOKEN,
+            allow_from: []
+        };
+    }
+
+    return config;
+}
+
+function toToml(value, indent = 0) {
+    const spaces = '  '.repeat(indent);
+    const nextIndent = indent + 1;
+    const nextSpaces = '  '.repeat(nextIndent);
+
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    if (typeof value === 'string') {
+        // Escape strings and wrap in quotes
+        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `"${escaped}"`;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return '[]';
+        // For arrays of primitives
+        if (typeof value[0] !== 'object') {
+            const items = value.map(v => toToml(v, indent));
+            return '[' + items.join(', ') + ']';
+        }
+        // For arrays of objects, use [[array]] syntax
+        let result = '\n';
+        for (const item of value) {
+            result += `${spaces}[[item]]\n`;
+            for (const [k, v] of Object.entries(item)) {
+                const tomlValue = toToml(v, nextIndent);
+                if (tomlValue !== '') {
+                    result += `${nextSpaces}${k} = ${tomlValue}\n`;
+                }
+            }
+        }
+        return result;
+    }
+
+    if (typeof value === 'object') {
+        let result = '';
+        const keys = Object.keys(value);
+        for (const key of keys) {
+            const v = value[key];
+            if (v === null || v === undefined) continue;
+
+            if (typeof v === 'object' && !Array.isArray(v)) {
+                // Nested object - use [section] syntax
+                result += `\n${spaces}[${key}]\n`;
+                for (const [subKey, subValue] of Object.entries(v)) {
+                    const tomlValue = toToml(subValue, nextIndent);
+                    if (tomlValue !== '') {
+                        result += `${nextSpaces}${subKey} = ${tomlValue}\n`;
+                    }
+                }
+            } else {
+                const tomlValue = toToml(v, indent);
+                if (tomlValue !== '') {
+                    result += `${spaces}${key} = ${tomlValue}\n`;
+                }
+            }
+        }
+        return result;
+    }
+
+    return '';
+}
+
+function jsonToToml(config) {
+    let toml = '# ZeroClaw Configuration\n';
+    toml += '# Generated by Docker entrypoint\n\n';
+
+    // Process top-level keys
+    for (const [key, value] of Object.entries(config)) {
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            toml += `[${key}]\n`;
+            for (const [subKey, subValue] of Object.entries(value)) {
+                if (typeof subValue === 'object' && !Array.isArray(subValue)) {
+                    // Nested object like [agents.defaults]
+                    toml += `\n[${key}.${subKey}]\n`;
+                    for (const [k, v] of Object.entries(subValue)) {
+                        const tomlValue = toToml(v, 1);
+                        if (tomlValue !== '') {
+                            toml += `  ${k} = ${tomlValue}\n`;
+                        }
+                    }
+                } else {
+                    const tomlValue = toToml(subValue, 1);
+                    if (tomlValue !== '') {
+                        toml += `  ${subKey} = ${tomlValue}\n`;
+                    }
+                }
+            }
+            toml += '\n';
+        } else {
+            const tomlValue = toToml(value, 0);
+            if (tomlValue !== '') {
+                toml += `${key} = ${tomlValue}\n`;
+            }
+        }
+    }
+
+    return toml;
 }
 
 function buildIronClawConfig() {
@@ -323,13 +517,30 @@ function buildConfig() {
 
 const config = buildConfig();
 
-const configJson = JSON.stringify(config, null, 2);
-fs.writeFileSync(CONFIG_FILE, configJson, 'utf8');
-console.log('[configure] wrote config to', CONFIG_FILE);
+// Skip config file writing for upstreams that don't use JSON/TOML config
+if (CONFIG_FILE === null) {
+    console.log('[configure] No config file needed for', UPSTREAM);
+    console.log('[configure] configuration complete');
+    process.exit(0);
+}
 
-// Backup
-const backupFile = path.join(STATE_DIR, `${UPSTREAM}.json.backup`);
-fs.writeFileSync(backupFile, configJson, 'utf8');
+let configContent;
+let configFormat;
+if (CONFIG_FORMAT === 'toml') {
+    configContent = jsonToToml(config);
+    configFormat = 'TOML';
+} else {
+    configContent = JSON.stringify(config, null, 2);
+    configFormat = 'JSON';
+}
+
+fs.writeFileSync(CONFIG_FILE, configContent, 'utf8');
+console.log(`[configure] wrote ${configFormat} config to`, CONFIG_FILE);
+
+// Backup (use same format as config)
+const backupExt = CONFIG_FORMAT === 'toml' ? 'toml' : 'json';
+const backupFile = path.join(STATE_DIR, `${UPSTREAM}.${backupExt}.backup`);
+fs.writeFileSync(backupFile, configContent, 'utf8');
 
 try {
     fs.chmodSync(CONFIG_FILE, 0o600);
