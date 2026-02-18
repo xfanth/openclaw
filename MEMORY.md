@@ -251,3 +251,37 @@ make up
 make logs
 make shell
 ```
+
+## Upstream Config File Formats
+
+Each upstream uses a different config format and file location:
+
+| Upstream | Format | Config Path | Notes |
+|----------|--------|-------------|-------|
+| OpenClaw | JSON | `$STATE_DIR/openclaw.json` | Full config with providers, channels, etc. |
+| PicoClaw | JSON | `$STATE_DIR/.picoclaw/config.json` | Go-style snake_case keys |
+| ZeroClaw | TOML | `$STATE_DIR/.zeroclaw/config.toml` | Flat structure with top-level fields |
+| IronClaw | N/A | PostgreSQL database | Uses `ironclaw onboard` for setup |
+
+### ZeroClaw Config Format (Critical!)
+
+ZeroClaw uses a **flat TOML structure**, not nested like PicoClaw/OpenClaw:
+
+```toml
+# ZeroClaw config.toml - FLAT structure!
+workspace_dir = "/data/.zeroclaw/workspace"
+config_path = "/data/.zeroclaw/config.toml"
+api_key = "your-api-key"
+default_provider = "openrouter"
+default_model = "anthropic/claude-sonnet-4-5"
+default_temperature = 0.7
+
+[gateway]
+port = 18789
+host = "127.0.0.1"
+allow_public_bind = false
+```
+
+Reference: https://github.com/zeroclaw-labs/zeroclaw/blob/main/dev/config.template.toml
+
+**Do NOT** use nested `[agents.defaults]` sections - ZeroClaw expects flat top-level fields.
