@@ -71,7 +71,7 @@ get_config_dir() {
 # Get STATE_DIR for upstream (passed to OPENCLAW_STATE_DIR)
 get_state_dir() {
     case "$UPSTREAM" in
-        zeroclaw) echo "/data" ;;
+        zeroclaw) echo "/data/.zeroclaw" ;;
         *) echo "/data/.${UPSTREAM}" ;;
     esac
 }

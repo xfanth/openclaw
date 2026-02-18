@@ -73,9 +73,7 @@ case "$UPSTREAM" in
         ;;
     zeroclaw)
         CLI_NAME="zeroclaw"
-        # ZeroClaw expects config at ~/.zeroclaw/ so STATE_DIR should be /data
-        # This makes configure.js create /data/.zeroclaw/config.toml
-        DEFAULT_STATE_DIR="/data"
+        DEFAULT_STATE_DIR="/data/.zeroclaw"
         ;;
     *)
         log_error "Unknown upstream: $UPSTREAM"
@@ -109,7 +107,7 @@ if [ "$(id -u)" = "0" ]; then
     fi
 
     # Create required directories first (before chown)
-    STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.${UPSTREAM}}"
+    STATE_DIR="${OPENCLAW_STATE_DIR:-$DEFAULT_STATE_DIR}"
     mkdir -p "$STATE_DIR/identity" 2>/dev/null || true
     mkdir -p "$STATE_DIR/credentials" 2>/dev/null || true
     mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" 2>/dev/null || true
