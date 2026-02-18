@@ -79,18 +79,26 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Paths that affect ALL upstreams
-          COMMON_PATHS="Dockerfile scripts/ .github/workflows/ docker-compose nginx.conf lib/ config/ .dockerignore"
+          # Paths that affect ALL upstreams (common infrastructure)
+          COMMON_PATHS="scripts/ .github/workflows/ docker-compose nginx.conf lib/ config/ .dockerignore"
+
+          # Check if base Dockerfile changed (builds all)
+          BUILD_ALL="false"
+          if echo "$CHANGED_FILES" | grep -q "^Dockerfile$"; then
+            BUILD_ALL="true"
+            echo "Base Dockerfile changed - building all upstreams"
+          fi
 
           # Check if any common paths changed
-          BUILD_ALL="false"
-          for pattern in $COMMON_PATHS; do
-            if echo "$CHANGED_FILES" | grep -q "^$pattern"; then
-              BUILD_ALL="true"
-              echo "Common path '$pattern' changed - building all upstreams"
-              break
-            fi
-          done
+          if [ "$BUILD_ALL" = "false" ]; then
+            for pattern in $COMMON_PATHS; do
+              if echo "$CHANGED_FILES" | grep -q "^$pattern"; then
+                BUILD_ALL="true"
+                echo "Common path '$pattern' changed - building all upstreams"
+                break
+              fi
+            done
+          fi
 
           # Determine which upstreams to build
           if [ "$BUILD_ALL" = "true" ]; then
@@ -100,8 +108,7 @@ jobs:
             exit 0
           fi
 
-          # Check upstream-specific files
-          UPSTREAMS_TO_BUILD="[]"
+          # Check upstream-specific files (Dockerfile-{upstream} or version tracking files)
           BUILD_OPENCLAW="false"
           BUILD_PICOCLAW="false"
           BUILD_IRONCLAW="false"
@@ -109,10 +116,10 @@ jobs:
 
           for file in $CHANGED_FILES; do
             case "$file" in
-              .openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
-              .picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
-              .ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
-              .zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
+              Dockerfile-openclaw|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
+              Dockerfile-picoclaw|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
+              Dockerfile-ironclaw|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
+              Dockerfile-zeroclaw|.zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
             esac
           done
 
@@ -416,14 +423,13 @@ jobs:
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile-${{ matrix.upstream }}
           platforms: linux/amd64
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            UPSTREAM=${{ matrix.upstream }}
             UPSTREAM_VERSION=${{ steps.determine-version.outputs.upstream_version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
