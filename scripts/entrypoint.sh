@@ -433,12 +433,31 @@ log_info "Creating supervisord configuration..."
 mkdir -p /var/log/supervisor
 
 # Determine gateway command based on upstream type
-# OpenClaw supports --bind, compiled binaries (picoclaw/zeroclaw/ironclaw) do not
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback"
-else
-    GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
-fi
+# Each upstream has different CLI for starting the gateway:
+# - OpenClaw: openclaw gateway --port X --bind Y
+# - PicoClaw: picoclaw gateway --port X
+# - ZeroClaw: zeroclaw gateway --port X
+# - IronClaw: ironclaw (no gateway subcommand - just runs agent with all channels)
+case "$UPSTREAM" in
+    openclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback"
+        ;;
+    picoclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        ;;
+    zeroclaw)
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        ;;
+    ironclaw)
+        # IronClaw has no 'gateway' subcommand - just run the binary
+        # It starts REPL, HTTP webhooks, and web gateway together
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME"
+        ;;
+    *)
+        log_error "Unknown upstream: $UPSTREAM"
+        exit 1
+        ;;
+esac
 
 cat > "$STATE_DIR/supervisord.conf" << EOF
 [supervisord]
