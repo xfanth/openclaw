@@ -308,14 +308,17 @@ function buildPicoClawConfig() {
 function buildZeroClawConfig() {
     // ZeroClaw config format (Rust) - uses TOML
     // See: https://github.com/zeroclaw-labs/zeroclaw
-    const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'glm-4.7';
-    const model = primaryModel.includes('/') ? primaryModel.split('/')[1] : primaryModel;
+    const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'zhipu/glm-4.7';
+    const parts = primaryModel.split('/');
+    const provider = parts.length > 1 ? parts[0] : 'zhipu';
+    const model = parts.length > 1 ? parts.slice(1).join('/') : primaryModel;
 
     const config = {
         agents: {
             defaults: {
                 workspace: `${STATE_DIR}/workspace`,
                 restrict_to_workspace: true,
+                provider: provider,
                 model: model,
                 max_tokens: 8192,
                 temperature: 0.7,
