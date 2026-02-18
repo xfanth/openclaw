@@ -240,7 +240,7 @@ function buildPicoClawConfig() {
         providers: {},
         gateway: {
             host: '127.0.0.1',
-            port: 18789
+            port: parseInt(process.env.OPENCLAW_INTERNAL_GATEWAY_PORT || '18789', 10)
         },
         tools: {
             web: {
@@ -336,7 +336,7 @@ function buildZeroClawConfig() {
         }
     }
 
-    const gatewayPort = parseInt(process.env.OPENCLAW_GATEWAY_PORT || '18789', 10);
+    const gatewayPort = parseInt(process.env.OPENCLAW_INTERNAL_GATEWAY_PORT || '18789', 10);
     const gatewayHost = process.env.ZEROCLAW_GATEWAY_HOST || '127.0.0.1';
 
     const config = {
