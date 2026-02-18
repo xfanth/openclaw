@@ -107,7 +107,7 @@ if [ "$(id -u)" = "0" ]; then
     fi
 
     # Create required directories first (before chown)
-    STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.${UPSTREAM}}"
+    STATE_DIR="${OPENCLAW_STATE_DIR:-$DEFAULT_STATE_DIR}"
     mkdir -p "$STATE_DIR/identity" 2>/dev/null || true
     mkdir -p "$STATE_DIR/credentials" 2>/dev/null || true
     mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" 2>/dev/null || true

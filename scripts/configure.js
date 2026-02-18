@@ -338,7 +338,9 @@ function buildZeroClawConfig() {
 
     const config = {
         workspace_dir: `${STATE_DIR}/workspace`,
-        config_path: `${STATE_DIR}/.zeroclaw/config.toml`,
+        // ZeroClaw expects config at ~/.zeroclaw/config.toml, and STATE_DIR is /data/.zeroclaw
+        // So the config path is just ${STATE_DIR}/config.toml (not ${STATE_DIR}/.zeroclaw/config.toml)
+        config_path: `${STATE_DIR}/config.toml`,
         api_key: apiKey,
         default_provider: defaultProvider,
         default_model: model,
