@@ -68,8 +68,17 @@ get_config_dir() {
     esac
 }
 
+# Get STATE_DIR for upstream (passed to OPENCLAW_STATE_DIR)
+get_state_dir() {
+    case "$UPSTREAM" in
+        zeroclaw) echo "/data" ;;
+        *) echo "/data/.${UPSTREAM}" ;;
+    esac
+}
+
 HOME_DIR=$(get_home_dir)
 CONFIG_DIR=$(get_config_dir)
+STATE_DIR=$(get_state_dir)
 
 log_info "Upstream type: $([ "$IS_NODEJS_UPSTREAM" = true ] && echo 'Node.js (full CLI)' || echo 'Compiled binary (limited CLI)')"
 log_info "Smoke Test Configuration:"
@@ -345,7 +354,7 @@ else
         fi
 
         log_info "State directory contents:"
-        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/" 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "${CONFIG_DIR}/" 2>/dev/null || true
 
         log_info "Config file contents:"
         # Use correct config file extension based on upstream type
@@ -378,7 +387,7 @@ HEALTHCHECK_ERRORS=0
 
 if [ "$IS_NODEJS_UPSTREAM" = true ]; then
     log_info "Running: ${UPSTREAM} status"
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=${STATE_DIR} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
         log_success "${UPSTREAM} status command succeeded"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
@@ -391,7 +400,7 @@ if [ "$IS_NODEJS_UPSTREAM" = true ]; then
     fi
 
     log_info "Running: ${UPSTREAM} gateway status"
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=${STATE_DIR} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1; then
         log_success "${UPSTREAM} gateway status command succeeded"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else

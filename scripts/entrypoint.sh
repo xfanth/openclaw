@@ -73,7 +73,9 @@ case "$UPSTREAM" in
         ;;
     zeroclaw)
         CLI_NAME="zeroclaw"
-        DEFAULT_STATE_DIR="/data/.zeroclaw"
+        # ZeroClaw expects config at ~/.zeroclaw/ so STATE_DIR should be /data
+        # This makes configure.js create /data/.zeroclaw/config.toml
+        DEFAULT_STATE_DIR="/data"
         ;;
     *)
         log_error "Unknown upstream: $UPSTREAM"
