@@ -285,4 +285,3 @@ allow_public_bind = false
 Reference: https://github.com/zeroclaw-labs/zeroclaw/blob/main/dev/config.template.toml
 
 **Do NOT** use nested `[agents.defaults]` sections - ZeroClaw expects flat top-level fields.
-
