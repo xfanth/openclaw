@@ -51,6 +51,26 @@ case "$UPSTREAM" in
         ;;
 esac
 
+# Get correct HOME directory for upstream
+# ZeroClaw expects config at ~/.zeroclaw/ so HOME=/data (not /data/.zeroclaw)
+get_home_dir() {
+    case "$UPSTREAM" in
+        zeroclaw) echo "/data" ;;
+        *) echo "/data/.${UPSTREAM}" ;;
+    esac
+}
+
+# Get config directory for upstream (where config file is located)
+get_config_dir() {
+    case "$UPSTREAM" in
+        zeroclaw) echo "/data/.zeroclaw" ;;
+        *) echo "/data/.${UPSTREAM}/.${UPSTREAM}" ;;
+    esac
+}
+
+HOME_DIR=$(get_home_dir)
+CONFIG_DIR=$(get_config_dir)
+
 log_info "Upstream type: $([ "$IS_NODEJS_UPSTREAM" = true ] && echo 'Node.js (full CLI)' || echo 'Compiled binary (limited CLI)')"
 log_info "Smoke Test Configuration:"
 echo "  UPSTREAM: ${UPSTREAM}"
@@ -321,7 +341,7 @@ else
         # For compiled binaries, run the gateway manually to see the actual error
         if [ "$IS_NODEJS_UPSTREAM" = false ]; then
             log_info "Running ${UPSTREAM} gateway manually to capture error..."
-            docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} /opt/${UPSTREAM}/${UPSTREAM} gateway --port 18789 2>&1" 2>&1 | head -50 || true
+            docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} /opt/${UPSTREAM}/${UPSTREAM} gateway --port 18789 2>&1" 2>&1 | head -50 || true
         fi
 
         log_info "State directory contents:"
@@ -341,7 +361,7 @@ else
                 ;;
         esac
         if [ "$CONFIG_EXT" != "none" ]; then
-            docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/data/.${UPSTREAM}/.${UPSTREAM}/config.${CONFIG_EXT}" 2>/dev/null | head -50 || true
+            docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "${CONFIG_DIR}/config.${CONFIG_EXT}" 2>/dev/null | head -50 || true
         fi
 
         TESTS_FAILED=$((TESTS_FAILED + 1))
@@ -358,7 +378,7 @@ HEALTHCHECK_ERRORS=0
 
 if [ "$IS_NODEJS_UPSTREAM" = true ]; then
     log_info "Running: ${UPSTREAM} status"
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
         log_success "${UPSTREAM} status command succeeded"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
@@ -371,7 +391,7 @@ if [ "$IS_NODEJS_UPSTREAM" = true ]; then
     fi
 
     log_info "Running: ${UPSTREAM} gateway status"
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1; then
         log_success "${UPSTREAM} gateway status command succeeded"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
@@ -386,12 +406,28 @@ if [ "$IS_NODEJS_UPSTREAM" = true ]; then
         HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
     fi
 else
+    # Compiled binaries - check binary and run status command
     log_info "Checking ${UPSTREAM} binary..."
     if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -x "/opt/${UPSTREAM}/${UPSTREAM}" 2>/dev/null; then
         log_success "${UPSTREAM} binary is executable"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_error "${UPSTREAM} binary not found or not executable"
+        HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
+    fi
+
+    # Test status command for compiled binaries
+    log_info "Running: ${UPSTREAM} status"
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=${HOME_DIR} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
+        log_success "${UPSTREAM} status command succeeded"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "${UPSTREAM} status command failed (may need onboarding first)"
+        cat /tmp/status.log 2>/dev/null || true
+    fi
+
+    if grep -q "EACCES\|permission denied\|Permission denied" /tmp/status.log 2>/dev/null; then
+        log_error "Permission errors in status output"
         HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
     fi
 fi
