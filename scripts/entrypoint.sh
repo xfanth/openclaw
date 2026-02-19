@@ -49,6 +49,8 @@ detect_upstream() {
 
 DETECTED_UPSTREAM=$(detect_upstream)
 
+log_info "Script starting as user: $(id)"
+
 if [ -n "${UPSTREAM:-}" ] && [ "$UPSTREAM" != "$DETECTED_UPSTREAM" ]; then
     log_warn "UPSTREAM env var ($UPSTREAM) doesn't match detected upstream ($DETECTED_UPSTREAM)"
     log_warn "Using detected upstream: $DETECTED_UPSTREAM"
@@ -121,18 +123,23 @@ if [ "$(id -u)" = "0" ]; then
     chown -R "$UPSTREAM:$UPSTREAM" "/var/log/$UPSTREAM" 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/log/supervisor 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/lib/nginx 2>/dev/null || true
+    chown -R "$UPSTREAM:$UPSTREAM" /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
 
     # Ensure identity directory has correct permissions (must be writable)
     chmod 700 "$STATE_DIR/identity" 2>/dev/null || true
     sync  # Ensure all chown operations complete before proceeding
 
     log_info "Switching to $UPSTREAM user..."
+    log_info "Current user: $(id)"
+    log_info "Nginx conf.d permissions: $(ls -ld /etc/nginx/conf.d 2>/dev/null || echo 'not found')"
     exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_EXTERNAL_GATEWAY_PORT,OPENCLAW_INTERNAL_GATEWAY_PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
 
 # =============================================================================
 # Configuration
 # =============================================================================
+log_info "Script running as non-root user: $(id)"
+log_info "Nginx conf.d permissions: $(ls -ld /etc/nginx/conf.d 2>/dev/null || echo 'not found')"
 STATE_DIR="${OPENCLAW_STATE_DIR:-$DEFAULT_STATE_DIR}"
 WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 EXTERNAL_GATEWAY_PORT="${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}"
@@ -275,6 +282,8 @@ node /app/scripts/configure.js
 # Configure Nginx
 # =============================================================================
 log_info "Configuring Nginx..."
+log_info "Current user: $(id)"
+log_info "conf.d permissions: $(ls -ld /etc/nginx/conf.d 2>/dev/null || echo 'not found')"
 
 # Generate nginx configuration
 # Use conf.d directory which is included by default in nginx Docker images
