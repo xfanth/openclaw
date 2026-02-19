@@ -388,30 +388,32 @@ GATEWAY_LISTENING_PORT=""
 
 # Wait for gateway to start listening (up to 30 seconds)
 for i in $(seq 1 30); do
-    # Check what ports the gateway process is listening on
-    GATEWAY_PORTS=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo 'no net tools'" 2>/dev/null | grep -E "(${UPSTREAM}|gateway)" | awk '{print $4}' | grep -oE '[0-9]+$' || true)
-
-    if [ -n "$GATEWAY_PORTS" ]; then
+    # Try to connect to the expected internal port directly
+    # This is more reliable than netstat/ss which may not be available
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:18789/ 2>/dev/null || echo '000'" | grep -qE '(200|404|401|403)'; then
         GATEWAY_ACTUALLY_RUNNING=true
-        GATEWAY_LISTENING_PORT=$(echo "$GATEWAY_PORTS" | head -1)
-        log_success "Gateway is listening on port(s): $GATEWAY_PORTS"
+        GATEWAY_LISTENING_PORT="18789"
+        log_success "Gateway is responding on port 18789 (attempt $i)"
         break
     fi
 
-    # Also try checking via /proc
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "ls /proc/*/fd 2>/dev/null | head -1" >/dev/null 2>&1; then
-        # Check if any process has listening sockets
-        LISTENING=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "cat /proc/net/tcp 2>/dev/null | awk '\$4==0A' | wc -l" 2>/dev/null || echo "0")
-        if [ "$LISTENING" -gt 0 ]; then
-            log_info "Found listening sockets (attempt $i)..."
-        fi
+    # Also try to check via /proc/net/tcp as fallback (hex port 4951 = 18789)
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "grep -q ':[0-9A-Fa-f]*:4951' /proc/net/tcp 2>/dev/null && echo 'found'" | grep -q "found"; then
+        GATEWAY_ACTUALLY_RUNNING=true
+        GATEWAY_LISTENING_PORT="18789"
+        log_success "Gateway found listening on port 18789 via /proc/net/tcp"
+        break
+    fi
+
+    if [ $((i % 5)) -eq 0 ]; then
+        log_info "Still waiting for gateway to respond (attempt $i/30)..."
     fi
 
     sleep 1
 done
 
 if [ "$GATEWAY_ACTUALLY_RUNNING" = false ]; then
-    log_error "Gateway is NOT listening on any port after 30 seconds!"
+    log_error "Gateway is NOT responding on port 18789 after 30 seconds!"
     log_info "Checking supervisord status..."
     docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl status 2>/dev/null || true
     log_info "Checking ${UPSTREAM} process..."
