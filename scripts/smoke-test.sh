@@ -379,6 +379,81 @@ else
 fi
 
 # =============================================================================
+# Test 8b: Verify Gateway is Actually Listening (Critical)
+# =============================================================================
+log_info "Test 8b: Verifying gateway is actually listening on internal port..."
+
+GATEWAY_ACTUALLY_RUNNING=false
+GATEWAY_LISTENING_PORT=""
+
+# Wait for gateway to start listening (up to 30 seconds)
+for i in $(seq 1 30); do
+    # Check what ports the gateway process is listening on
+    GATEWAY_PORTS=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo 'no net tools'" 2>/dev/null | grep -E "(${UPSTREAM}|gateway)" | awk '{print $4}' | grep -oE '[0-9]+$' || true)
+
+    if [ -n "$GATEWAY_PORTS" ]; then
+        GATEWAY_ACTUALLY_RUNNING=true
+        GATEWAY_LISTENING_PORT=$(echo "$GATEWAY_PORTS" | head -1)
+        log_success "Gateway is listening on port(s): $GATEWAY_PORTS"
+        break
+    fi
+
+    # Also try checking via /proc
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "ls /proc/*/fd 2>/dev/null | head -1" >/dev/null 2>&1; then
+        # Check if any process has listening sockets
+        LISTENING=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "cat /proc/net/tcp 2>/dev/null | awk '\$4==0A' | wc -l" 2>/dev/null || echo "0")
+        if [ "$LISTENING" -gt 0 ]; then
+            log_info "Found listening sockets (attempt $i)..."
+        fi
+    fi
+
+    sleep 1
+done
+
+if [ "$GATEWAY_ACTUALLY_RUNNING" = false ]; then
+    log_error "Gateway is NOT listening on any port after 30 seconds!"
+    log_info "Checking supervisord status..."
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl status 2>/dev/null || true
+    log_info "Checking ${UPSTREAM} process..."
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ps aux | grep -E "${UPSTREAM}|gateway" | head -5 || true
+    log_info "Recent ${UPSTREAM} logs:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" tail -50 /var/log/supervisor/${UPSTREAM}.log 2>/dev/null || true
+    log_info "Recent ${UPSTREAM} error logs:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" tail -50 /var/log/supervisor/${UPSTREAM}-error.log 2>/dev/null || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+else
+    log_success "Gateway confirmed running on port $GATEWAY_LISTENING_PORT"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# Verify internal port connectivity directly (bypass nginx)
+log_info "Testing direct connection to gateway on internal port 18789..."
+INTERNAL_HEALTH=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/healthz 2>/dev/null || echo "000")
+
+if [ "$INTERNAL_HEALTH" = "200" ]; then
+    log_success "Gateway /healthz endpoint responds on internal port (HTTP 200)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+elif [ "$INTERNAL_HEALTH" = "404" ]; then
+    # Some gateways don't have /healthz but might have root
+    INTERNAL_ROOT=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/ 2>/dev/null || echo "000")
+    if [ "$INTERNAL_ROOT" != "000" ] && [ "$INTERNAL_ROOT" != "502" ] && [ "$INTERNAL_ROOT" != "503" ]; then
+        log_success "Gateway responds on internal port (HTTP $INTERNAL_ROOT)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "Gateway not responding on internal port 18789 (got HTTP $INTERNAL_ROOT)"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        exit 1
+    fi
+else
+    log_error "Gateway /healthz returned HTTP $INTERNAL_HEALTH - expected 200"
+    log_info "Checking if gateway is bound to correct port..."
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "netstat -tlnp 2>/dev/null || ss -tlnp" | head -20 || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+# =============================================================================
 # Test 9: HTTP Auth Validation
 # =============================================================================
 log_info "Test 9: Testing HTTP auth on main endpoint..."
@@ -393,25 +468,38 @@ else
     TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
 
-log_info "Testing / with auth (expect backend response, not 502)..."
+log_info "Testing / with auth (expect backend response, not 502/404 from proxy)..."
 HTTP_BODY_WITH_AUTH=$(curl -s -u admin:testpass http://localhost:18080/ 2>/dev/null || echo "")
 HTTP_CODE_WITH_AUTH=$(curl -s -o /dev/null -w "%{http_code}" -u admin:testpass http://localhost:18080/ 2>/dev/null || echo "000")
 
-if [ "$HTTP_CODE_WITH_AUTH" = "502" ]; then
-    log_error "Main endpoint returned 502 with auth - backend gateway not running"
+if [ "$HTTP_CODE_WITH_AUTH" = "502" ] || [ "$HTTP_CODE_WITH_AUTH" = "503" ] || [ "$HTTP_CODE_WITH_AUTH" = "504" ]; then
+    log_error "Main endpoint returned $HTTP_CODE_WITH_AUTH - backend gateway not running or proxy error"
     TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
 elif [ "$HTTP_CODE_WITH_AUTH" = "404" ]; then
     # For API gateways (picoclaw, zeroclaw, ironclaw), 404 on root is expected
-    # They don't have web UIs at /. As long as we get here (not 502), gateway is connected.
-    # Only fail if response looks like nginx HTML error page (indicates proxy issue).
+    # They don't have web UIs at /. But we MUST verify it's the gateway returning 404, not nginx.
+    # Check if response body looks like an API response (JSON) or is empty, vs nginx HTML
     if echo "$HTTP_BODY_WITH_AUTH" | grep -q "<html>" && echo "$HTTP_BODY_WITH_AUTH" | grep -qi "nginx"; then
         log_error "Main endpoint returned nginx HTML 404 - gateway not properly connected"
         echo "$HTTP_BODY_WITH_AUTH" | head -20
         TESTS_FAILED=$((TESTS_FAILED + 1))
-    else
+        exit 1
+    elif [ -z "$HTTP_BODY_WITH_AUTH" ] || echo "$HTTP_BODY_WITH_AUTH" | grep -qE "^\{|^\[|Not Found|not found"; then
+        # Empty body or JSON response or API-style "Not Found" = gateway is responding
         log_success "Backend gateway connected (returns 404 for root - API gateway with no web UI)"
         TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "Got 404 with unexpected body format - investigating..."
+        echo "$HTTP_BODY_WITH_AUTH" | head -5
+        # Still count as success if we didn't get nginx error
+        log_success "Backend gateway likely connected (HTTP 404, non-nginx response)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     fi
+elif [ "$HTTP_CODE_WITH_AUTH" = "000" ]; then
+    log_error "Main endpoint connection failed (HTTP 000) - service not reachable"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
 else
     log_success "Main endpoint responds with auth (HTTP $HTTP_CODE_WITH_AUTH)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
