@@ -30,7 +30,9 @@ permissions:
 jobs:
   create-release:
     name: Create Release Tag
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
     steps:
@@ -79,7 +81,9 @@ jobs:
 
   build:
     name: Build
-    runs-on: warp-ubuntu-latest-x64-32x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-32x
     needs: create-release
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
@@ -124,7 +128,9 @@ jobs:
 
   security-scan:
     name: Security Scan (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-4x
     needs: [build]
     if: always() && needs.build.result == 'success'
     strategy:

@@ -47,7 +47,9 @@ permissions:
 jobs:
   detect-changes:
     name: Detect Changes
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     outputs:
       upstreams: ${{ steps.detect.outputs.upstreams }}
       any_changes: ${{ steps.detect.outputs.any_changes }}
@@ -170,7 +172,9 @@ jobs:
 
   pre-commit:
     name: Pre-Commit Checks
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -198,7 +202,9 @@ jobs:
 
   python-tests:
     name: Python Tests
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-4x
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -219,7 +225,9 @@ jobs:
 
   check-pr-status:
     name: Check PR Status
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     if: github.event_name == 'push'
     outputs:
       can_skip_build: ${{ steps.check.outputs.can_skip_build }}
@@ -282,7 +290,9 @@ jobs:
 
   build:
     name: Build (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-32x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-32x
     needs: [detect-changes, pre-commit, python-tests, check-pr-status]
     if: |
       always() &&
@@ -455,7 +465,9 @@ jobs:
 
   smoke-test:
     name: Smoke Test (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-8x
     needs: [detect-changes, build, check-pr-status]
     if: |
       always() &&
@@ -498,7 +510,9 @@ jobs:
 
   security-scan:
     name: Security Scan (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-4x
     needs: [detect-changes, build, check-pr-status]
     if: |
       always() &&
@@ -548,7 +562,9 @@ jobs:
 
   download-pr-artifacts:
     name: Download PR Artifacts (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     needs: [detect-changes, pre-commit, python-tests, check-pr-status]
     if: |
       always() &&
@@ -578,7 +594,9 @@ jobs:
 
   push-to-ghcr:
     name: Push to GHCR (${{ matrix.upstream }})
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on:
+      group: default
+      labels: warp-ubuntu-latest-x64-2x
     needs: [detect-changes, pre-commit, python-tests, build, smoke-test, security-scan, check-pr-status, download-pr-artifacts]
     if: |
       always() &&
