@@ -393,16 +393,25 @@ else
     TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
 
-log_info "Testing / with auth (expect not 404)..."
+log_info "Testing / with auth (expect backend response, not 502)..."
+HTTP_BODY_WITH_AUTH=$(curl -s -u admin:testpass http://localhost:18080/ 2>/dev/null || echo "")
 HTTP_CODE_WITH_AUTH=$(curl -s -o /dev/null -w "%{http_code}" -u admin:testpass http://localhost:18080/ 2>/dev/null || echo "000")
-if [ "$HTTP_CODE_WITH_AUTH" = "404" ]; then
-    log_error "Main endpoint returned 404 with auth - gateway not properly connected"
-    log_info "This indicates nginx is up but the backend gateway is not responding correctly"
-    curl -s -u admin:testpass http://localhost:18080/ 2>/dev/null | head -20 || true
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-elif [ "$HTTP_CODE_WITH_AUTH" = "502" ]; then
+
+if [ "$HTTP_CODE_WITH_AUTH" = "502" ]; then
     log_error "Main endpoint returned 502 with auth - backend gateway not running"
     TESTS_FAILED=$((TESTS_FAILED + 1))
+elif [ "$HTTP_CODE_WITH_AUTH" = "404" ]; then
+    # Check if 404 is from backend (gateway connected) or nginx (gateway not found)
+    if echo "$HTTP_BODY_WITH_AUTH" | grep -q "404 page not found"; then
+        # Backend responded with its own 404 - gateway is connected but has no root endpoint
+        log_success "Backend gateway connected (returns 404 for root - API gateway with no web UI)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        # Nginx 404 - gateway not properly connected
+        log_error "Main endpoint returned nginx 404 - gateway not properly connected"
+        echo "$HTTP_BODY_WITH_AUTH" | head -20
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
 else
     log_success "Main endpoint responds with auth (HTTP $HTTP_CODE_WITH_AUTH)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
