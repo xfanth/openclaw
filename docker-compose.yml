@@ -30,7 +30,12 @@ services:
     #     UPSTREAM_VERSION: ${UPSTREAM_VERSION:-main}
 
     # Or use pre-built image from GitHub Packages (recommended)
-    image: ${OPENCLAW_IMAGE:-ghcr.io/xfanth/openclaw:latest}
+    # Image is dynamically selected based on UPSTREAM variable:
+    #   - UPSTREAM=zeroclaw → ghcr.io/xfanth/zeroclaw:latest
+    #   - UPSTREAM=openclaw → ghcr.io/xfanth/openclaw:latest
+    #   - UPSTREAM=picoclaw → ghcr.io/xfanth/picoclaw:latest
+    #   - UPSTREAM=ironclaw → ghcr.io/xfanth/ironclaw:latest
+    image: ${OPENCLAW_IMAGE:-ghcr.io/xfanth/${UPSTREAM:-openclaw}:latest}
 
     container_name: ${UPSTREAM:-openclaw}-gateway
     hostname: ${UPSTREAM:-openclaw}

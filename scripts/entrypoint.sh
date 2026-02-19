@@ -493,8 +493,29 @@ autorestart=true
 priority=20
 stdout_logfile=/var/log/supervisor/$UPSTREAM.log
 stderr_logfile=/var/log/supervisor/$UPSTREAM-error.log
-environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",NODE_ENV="production"
+environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",OPENCLAW_INTERNAL_GATEWAY_PORT="${INTERNAL_GATEWAY_PORT}",NODE_ENV="production"
 EOF
+
+# =============================================================================
+# Add gateway readiness verification
+# =============================================================================
+log_info "Gateway command: $GATEWAY_CMD"
+log_info "Supervisord config written to: $STATE_DIR/supervisord.conf"
+log_info "Environment variables passed to $UPSTREAM:"
+log_info "  HOME=${STATE_DIR}"
+log_info "  OPENCLAW_STATE_DIR=${STATE_DIR}"
+log_info "  OPENCLAW_WORKSPACE_DIR=${WORKSPACE_DIR}"
+log_info "  OPENCLAW_INTERNAL_GATEWAY_PORT=${INTERNAL_GATEWAY_PORT}"
+log_info "  NODE_ENV=production"
+
+# Verify supervisord config is valid
+if [ -f "$STATE_DIR/supervisord.conf" ]; then
+    log_info "Supervisord configuration file exists"
+    log_info "Contents preview:"
+    head -20 "$STATE_DIR/supervisord.conf" | while read line; do
+        log_info "  $line"
+    done
+fi
 
 # =============================================================================
 # Start supervisord (which manages nginx and the upstream gateway)
@@ -503,5 +524,12 @@ log_success "Starting $UPSTREAM Gateway (external: $EXTERNAL_GATEWAY_PORT, inter
 log_info "Web interface available at: http://localhost:$EXTERNAL_GATEWAY_PORT"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
 log_info "Starting supervisord to manage services..."
+log_info ""
+log_info "=== Troubleshooting Info ==="
+log_info "If you see 404/502 errors:"
+log_info "  1. Check gateway logs: docker logs <container> | grep -A 20 'zeroclaw'"
+log_info "  2. Verify port binding: docker exec <container> netstat -tlnp | grep $INTERNAL_GATEWAY_PORT"
+log_info "  3. Test internal endpoint: docker exec <container> curl -s http://127.0.0.1:$INTERNAL_GATEWAY_PORT/healthz"
+log_info ""
 
 exec supervisord -c "$STATE_DIR/supervisord.conf"
