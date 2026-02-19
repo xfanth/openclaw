@@ -97,14 +97,6 @@ jobs:
       - name: Setup WarpBuild Docker Builder
         uses: WarpBuilds/warpbuild@v1
 
-      - name: Cache Docker layers
-        uses: WarpBuilds/cache@v1
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-release-${{ matrix.upstream }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-release-${{ matrix.upstream }}-
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -122,7 +114,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: WarpBuilds/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile-${{ matrix.upstream }}
@@ -135,14 +127,6 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             IMAGE_VERSION=${{ needs.create-release.outputs.new_version }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Update build cache
-        if: always()
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
   security-scan:
     name: Security Scan (${{ matrix.upstream }})

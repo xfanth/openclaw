@@ -431,15 +431,7 @@ jobs:
             upstream=${{ matrix.upstream }}
 
       - name: Build Docker image
-        uses: WarpBuilds/cache@v1
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.upstream }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.upstream }}-
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: WarpBuilds/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile-${{ matrix.upstream }}
@@ -454,8 +446,6 @@ jobs:
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             IMAGE_VERSION=${{ steps.determine-version.outputs.xfanth_tag }}
           outputs: type=docker,dest=/tmp/docker-image-${{ matrix.upstream }}.tar
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
@@ -463,12 +453,6 @@ jobs:
           name: docker-image-${{ matrix.upstream }}
           path: /tmp/docker-image-${{ matrix.upstream }}.tar
           retention-days: 1
-
-      - name: Update build cache
-        if: always()
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
   smoke-test:
     name: Smoke Test (${{ matrix.upstream }})
