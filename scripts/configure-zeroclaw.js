@@ -36,11 +36,10 @@ function buildConfig(STATE_DIR, WORKSPACE_DIR, parseList, PROVIDER_URLS, PROVIDE
 
     const gatewayPort = parseInt(process.env.OPENCLAW_INTERNAL_GATEWAY_PORT || '18789', 10);
     const gatewayHost = process.env.ZEROCLAW_GATEWAY_HOST || '127.0.0.1';
-    const zeroclawDir = '/data/.zeroclaw';
 
     const config = {
-        workspace_dir: `${zeroclawDir}/workspace`,
-        config_path: `${zeroclawDir}/config.toml`,
+        workspace_dir: WORKSPACE_DIR,
+        config_path: `${STATE_DIR}/config.toml`,
         api_key: apiKey,
         default_provider: defaultProvider,
         default_model: model,
